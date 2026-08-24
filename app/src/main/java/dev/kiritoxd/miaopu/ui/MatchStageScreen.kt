@@ -1,0 +1,384 @@
+package dev.kiritoxd.miaopu.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import dev.kiritoxd.miaopu.data.MatchSummary
+import dev.kiritoxd.miaopu.data.RatingStage
+import dev.kiritoxd.miaopu.data.RatingTarget
+import dev.kiritoxd.miaopu.data.StageRatingDetail
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.TabRow
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
+
+private enum class StageTargetOrder(val label: String) {
+    HOT("热门"), LATEST("最新"), HIGH_SCORE("高分"), LOW_SCORE("低分"),
+}
+
+private data class StageTargetTab(val name: String, val targets: List<RatingTarget>)
+
+@Composable
+fun MatchStageScreen(
+    viewModel: MiaopuViewModel,
+    match: MatchSummary,
+    stage: RatingStage,
+    stageNumber: Int,
+    showStageNumber: Boolean,
+) {
+    BackHandler(onBack = viewModel::goBack)
+    Scaffold(
+        containerColor = MiuixTheme.colorScheme.background,
+        topBar = {
+            SmallTopAppBar(
+                title = "单局详情",
+                subtitle = if (showStageNumber) "第 $stageNumber 局 · ${stage.name}" else stage.name,
+                navigationIcon = {
+                    IconButton(onClick = viewModel::goBack) {
+                        Icon(MiuixIcons.ChevronBackward, contentDescription = "返回赛事详情")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        when (val state = viewModel.stageRatingState) {
+            LoadState.Loading -> LoadingPane("正在加载这一局的全部评分", Modifier.padding(innerPadding))
+            is LoadState.Failed -> ErrorPane(
+                message = state.message,
+                retryable = state.retryable,
+                onRetry = viewModel::retry,
+                modifier = Modifier.padding(innerPadding),
+            )
+            is LoadState.Ready -> StageRatingContent(
+                detail = state.value,
+                match = match,
+                stage = stage,
+                modifier = Modifier.padding(innerPadding),
+                onTargetClick = viewModel::openComments,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StageRatingContent(
+    detail: StageRatingDetail,
+    match: MatchSummary,
+    stage: RatingStage,
+    modifier: Modifier,
+    onTargetClick: (RatingTarget) -> Unit,
+) {
+    val tabs = remember(detail) {
+        buildList {
+            add(StageTargetTab("全部", detail.targets))
+            detail.groups.filter { it.targets.isNotEmpty() }.forEach {
+                add(StageTargetTab(it.name, it.targets))
+            }
+        }
+    }
+    var selectedTabIndex by rememberSaveable(detail.title) { mutableIntStateOf(0) }
+    var selectedOrderIndex by rememberSaveable(detail.title, "order") { mutableIntStateOf(0) }
+    val currentTabIndex = selectedTabIndex.coerceIn(0, tabs.lastIndex.coerceAtLeast(0))
+    val currentOrderIndex = selectedOrderIndex.coerceIn(0, StageTargetOrder.entries.lastIndex)
+    val selectedTab = tabs[currentTabIndex]
+    val selectedOrder = StageTargetOrder.entries[currentOrderIndex]
+    val visibleTargets = remember(selectedTab, selectedOrder) {
+        when (selectedOrder) {
+            StageTargetOrder.HOT -> selectedTab.targets
+            StageTargetOrder.LATEST -> selectedTab.targets.sortedByDescending { it.nodeId ?: Long.MIN_VALUE }
+            StageTargetOrder.HIGH_SCORE -> selectedTab.targets.sortedWith(
+                compareByDescending<RatingTarget> { it.scoreAverage }.thenByDescending { it.scoreCount },
+            )
+            StageTargetOrder.LOW_SCORE -> selectedTab.targets.sortedWith(
+                compareBy<RatingTarget> { if (it.scoreCount == 0) 1 else 0 }
+                    .thenBy { it.scoreAverage }
+                    .thenByDescending { it.scoreCount },
+            )
+        }
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        StageOverview(
+            title = detail.title.ifBlank { stage.name },
+            description = detail.description ?: match.introduction.ifBlank {
+                match.teams.joinToString(" vs ") { it.name }.ifBlank { match.name }
+            },
+            imageUrl = detail.imageUrl,
+            match = match,
+        )
+        TabRow(
+            tabs = tabs.map { it.name },
+            selectedTabIndex = currentTabIndex,
+            onTabSelected = { selectedTabIndex = it },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            colors = flatTabRowColors(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${visibleTargets.size}个评分",
+                modifier = Modifier.weight(1f),
+                style = MiuixTheme.textStyles.body1,
+                fontWeight = FontWeight.Bold,
+            )
+            CompactOrderSelector(
+                selectedIndex = currentOrderIndex,
+                onSelected = { selectedOrderIndex = it },
+            )
+        }
+
+        if (visibleTargets.isEmpty()) {
+            EmptyPane("这个分组暂时没有评分对象", Modifier.weight(1f))
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = PaddingValues(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(
+                    items = visibleTargets,
+                    key = { target -> "${target.outBizType}:${target.outBizNo}" },
+                    contentType = { "rating-target" },
+                ) { target ->
+                    OfficialRatingTargetCard(target = target, onClick = { onTargetClick(target) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactOrderSelector(selectedIndex: Int, onSelected: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        StageTargetOrder.entries.forEachIndexed { index, order ->
+            val selected = index == selectedIndex
+            TextButton(
+                text = order.label,
+                onClick = { onSelected(index) },
+                modifier = Modifier.width(42.dp),
+                minWidth = 42.dp,
+                minHeight = 30.dp,
+                cornerRadius = 10.dp,
+                insideMargin = PaddingValues(0.dp),
+                colors = ButtonDefaults.textButtonColors(
+                    color = if (selected) MiuixTheme.colorScheme.primary else {
+                        MiuixTheme.colorScheme.surfaceVariant
+                    },
+                    textColor = if (selected) MiuixTheme.colorScheme.onPrimary else {
+                        MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    },
+                ),
+                textStyle = MiuixTheme.textStyles.footnote2,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StageOverview(
+    title: String,
+    description: String,
+    imageUrl: String?,
+    match: MatchSummary,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier.size(58.dp).clip(RoundedCornerShape(14.dp))
+                .background(MiuixTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (imageUrl.isNullOrBlank()) {
+                Text(
+                    text = match.esport.shortTitle,
+                    color = MiuixTheme.colorScheme.primary,
+                    style = MiuixTheme.textStyles.body1,
+                    fontWeight = FontWeight.Bold,
+                )
+            } else {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MiuixTheme.textStyles.title2,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = description,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OfficialRatingTargetCard(target: RatingTarget, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).semantics {
+            role = Role.Button
+            contentDescription = "查看 ${target.name} 的评分与评论"
+        },
+        insideMargin = PaddingValues(0.dp),
+        cornerRadius = 18.dp,
+        colors = CardDefaults.defaultColors(
+            color = MiuixTheme.colorScheme.surface,
+            contentColor = MiuixTheme.colorScheme.onSurface,
+        ),
+        pressFeedbackType = PressFeedbackType.Sink,
+        showIndication = true,
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TargetPortrait(target)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = target.name,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MiuixTheme.textStyles.title3,
+                    fontWeight = FontWeight.Bold,
+                )
+                val label = target.labels.firstOrNull() ?: target.description
+                if (!label.isNullOrBlank()) {
+                    Spacer(Modifier.height(5.dp))
+                    TagPill(label)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (target.commentCount > 0) "${target.commentCount} 条评论" else "点击查看评论",
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.width(78.dp), horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "★★★★★",
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.48f),
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = if (target.scoreCount > 0) "%.1f".format(target.scoreAverage) else "—",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.End,
+                    style = MiuixTheme.textStyles.title1,
+                    color = HupuScoreBlue,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "${target.scoreCount} JRs评分",
+                    maxLines = 1,
+                    style = MiuixTheme.textStyles.footnote2,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+        }
+        target.hotComment?.takeIf(String::isNotBlank)?.let { comment ->
+            Text(
+                text = "“$comment”",
+                modifier = Modifier.fillMaxWidth().background(HupuCommentBackground)
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MiuixTheme.textStyles.footnote1,
+                color = HupuCommentText,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetPortrait(target: RatingTarget) {
+    Box(
+        modifier = Modifier.size(68.dp).clip(RoundedCornerShape(12.dp))
+            .background(MiuixTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (target.imageUrl.isNullOrBlank()) {
+            Text(
+                text = target.name.take(1),
+                color = MiuixTheme.colorScheme.primary,
+                style = MiuixTheme.textStyles.title2,
+                fontWeight = FontWeight.Bold,
+            )
+        } else {
+            AsyncImage(
+                model = target.imageUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+    }
+}
+
+private val HupuScoreBlue = Color(0xFF28A4ED)
+private val HupuCommentBackground = Color(0xFFFFF5EC)
+private val HupuCommentText = Color(0xFFE85D2A)

@@ -1,0 +1,509 @@
+package dev.kiritoxd.miaopu.ui
+
+import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import dev.kiritoxd.miaopu.BuildConfig
+import dev.kiritoxd.miaopu.data.AdapterResult
+import dev.kiritoxd.miaopu.data.AdapterStatus
+import dev.kiritoxd.miaopu.data.CommentPage
+import dev.kiritoxd.miaopu.data.Esport
+import dev.kiritoxd.miaopu.data.EsportCatalog
+import dev.kiritoxd.miaopu.data.EsportSubscriptionStore
+import dev.kiritoxd.miaopu.data.HupuAdapter
+import dev.kiritoxd.miaopu.data.HupuCookieSession
+import dev.kiritoxd.miaopu.data.HupuUrls
+import dev.kiritoxd.miaopu.data.GitHubRelease
+import dev.kiritoxd.miaopu.data.GitHubReleaseAdapter
+import dev.kiritoxd.miaopu.data.MatchSummary
+import dev.kiritoxd.miaopu.data.RatingDetail
+import dev.kiritoxd.miaopu.data.RatingStage
+import dev.kiritoxd.miaopu.data.RatingTarget
+import dev.kiritoxd.miaopu.data.Schedule
+import dev.kiritoxd.miaopu.data.StageRatingDetail
+import dev.kiritoxd.miaopu.data.mergeCommentsByHeat
+import dev.kiritoxd.miaopu.data.isNewerVersion
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+
+sealed interface LoadState<out T> {
+    data object Loading : LoadState<Nothing>
+    data class Ready<T>(val value: T) : LoadState<T>
+    data class Failed(val message: String, val retryable: Boolean) : LoadState<Nothing>
+}
+
+sealed interface UpdateCheckState {
+    data object Idle : UpdateCheckState
+    data object Checking : UpdateCheckState
+    data class UpToDate(val latestTag: String) : UpdateCheckState
+    data class Available(val release: GitHubRelease) : UpdateCheckState
+    data class Failed(val message: String) : UpdateCheckState
+}
+
+sealed interface AppScreen {
+    data object Schedule : AppScreen
+    data object Subscriptions : AppScreen
+    data class Ratings(val match: MatchSummary) : AppScreen
+    data class Stage(
+        val match: MatchSummary,
+        val stage: RatingStage,
+        val stageNumber: Int,
+        val returnToStagePicker: Boolean,
+    ) : AppScreen
+    data class Comments(val target: RatingTarget) : AppScreen
+    data class Web(
+        val title: String,
+        val url: String,
+        val login: Boolean,
+    ) : AppScreen
+}
+
+enum class MainSection {
+    HOME,
+    EVENTS,
+    PROFILE,
+}
+
+class MiaopuViewModel(application: Application) : AndroidViewModel(application) {
+    private val cookieSession = HupuCookieSession(application).also { it.restore() }
+    private val adapter = HupuAdapter(cookieSession)
+    private val releaseAdapter = GitHubReleaseAdapter()
+    internal val commentReplies = CommentRepliesController(viewModelScope, adapter)
+    private val subscriptionStore = EsportSubscriptionStore(application)
+    private val initialSubscriptions = subscriptionStore.subscriptions()
+    private val schedules = mutableMapOf<Esport, Schedule>()
+    private val scheduleViewports = mutableMapOf<Esport, ScheduleViewportSnapshot>()
+
+    var screen: AppScreen by mutableStateOf(AppScreen.Schedule)
+        private set
+    var subscribedEsports: Set<Esport> by mutableStateOf(initialSubscriptions)
+        private set
+    var selectedEsport: Esport by mutableStateOf(subscriptionStore.selected(initialSubscriptions))
+        private set
+    var selectedMainSection: MainSection by mutableStateOf(MainSection.HOME)
+        private set
+    var scheduleState: LoadState<Schedule> by mutableStateOf(LoadState.Loading)
+        private set
+    var ratingState: LoadState<RatingDetail> by mutableStateOf(LoadState.Loading)
+        private set
+    var stageRatingState: LoadState<StageRatingDetail> by mutableStateOf(LoadState.Loading)
+        private set
+    var commentState: LoadState<CommentPage> by mutableStateOf(LoadState.Loading)
+        private set
+    var isLoggedIn: Boolean by mutableStateOf(cookieSession.isAuthenticated())
+        private set
+    var isLoadingMoreComments: Boolean by mutableStateOf(false)
+        private set
+    var commentPaginationError: String? by mutableStateOf(null)
+        private set
+    var scoringTargetKey: String? by mutableStateOf(null)
+        private set
+    var commentDraft: String by mutableStateOf("")
+        private set
+    var isPublishingComment: Boolean by mutableStateOf(false)
+        private set
+    var message: String? by mutableStateOf(null)
+        private set
+    var updateCheckState: UpdateCheckState by mutableStateOf(UpdateCheckState.Idle)
+        private set
+
+    val currentVersion: String get() = BuildConfig.VERSION_NAME
+    val repositoryUrl: String get() = GitHubReleaseAdapter.REPOSITORY_URL
+
+    private var webReturnScreen: AppScreen = AppScreen.Schedule
+    private var commentsParent: AppScreen = AppScreen.Schedule
+    private var scheduleJob: Job? = null
+    private var ratingJob: Job? = null
+    private var stageRatingJob: Job? = null
+    private var commentJob: Job? = null
+    private var moreCommentsJob: Job? = null
+
+    init {
+        loadSchedule()
+    }
+
+    fun selectEsport(esport: Esport) {
+        if (esport !in subscribedEsports) return
+        if (selectedEsport == esport) return
+        selectedEsport = esport
+        subscriptionStore.saveSelected(esport)
+        schedules[esport]?.let {
+            scheduleState = LoadState.Ready(it)
+        } ?: loadSchedule()
+    }
+
+    fun openSubscriptions() {
+        screen = AppScreen.Subscriptions
+    }
+
+    fun toggleSubscription(esport: Esport) {
+        if (esport in subscribedEsports && subscribedEsports.size == 1) {
+            message = "至少保留一个赛事订阅"
+            return
+        }
+
+        val nextIds = subscribedEsports.mapTo(mutableSetOf()) { it.businessId }
+        if (esport in subscribedEsports) nextIds.remove(esport.businessId) else nextIds.add(esport.businessId)
+        val next = EsportCatalog.all.filterTo(linkedSetOf()) { it.businessId in nextIds }
+        subscribedEsports = next
+        subscriptionStore.saveSubscriptions(next)
+
+        if (selectedEsport !in next) {
+            selectedEsport = next.first()
+            subscriptionStore.saveSelected(selectedEsport)
+            loadSchedule()
+        }
+    }
+
+    fun selectMainSection(section: MainSection) {
+        selectedMainSection = section
+    }
+
+    fun retry() {
+        when (val current = screen) {
+            AppScreen.Schedule -> loadSchedule(force = true)
+            AppScreen.Subscriptions -> Unit
+            is AppScreen.Ratings -> loadRatings(current.match)
+            is AppScreen.Stage -> loadStageRating(current.match, current.stage)
+            is AppScreen.Comments -> loadComments(current.target)
+            is AppScreen.Web -> Unit
+        }
+    }
+
+    fun refreshSchedule() = loadSchedule(force = true)
+
+    fun checkForUpdates() {
+        if (updateCheckState == UpdateCheckState.Checking) return
+        updateCheckState = UpdateCheckState.Checking
+        viewModelScope.launch {
+            val result = releaseAdapter.latest()
+            val release = result.data
+            updateCheckState = when {
+                release != null && isNewerVersion(release.tagName, currentVersion) ->
+                    UpdateCheckState.Available(release)
+                release != null -> UpdateCheckState.UpToDate(release.tagName)
+                else -> UpdateCheckState.Failed(result.error?.message ?: "检查更新失败")
+            }
+        }
+    }
+
+    internal fun scheduleViewport(esport: Esport): ScheduleViewportSnapshot? = scheduleViewports[esport]
+
+    internal fun saveScheduleViewport(esport: Esport, snapshot: ScheduleViewportSnapshot) {
+        scheduleViewports[esport] = snapshot
+    }
+
+    fun openMatch(match: MatchSummary) {
+        val ratings = AppScreen.Ratings(match)
+        screen = ratings
+        loadRatings(match)
+    }
+
+    fun openStage(match: MatchSummary, stage: RatingStage, stageNumber: Int) {
+        screen = AppScreen.Stage(
+            match = match,
+            stage = stage,
+            stageNumber = stageNumber,
+            returnToStagePicker = true,
+        )
+        loadStageRating(match, stage)
+    }
+
+    fun openComments(target: RatingTarget) {
+        commentDraft = ""
+        commentsParent = screen
+        screen = AppScreen.Comments(target)
+        loadComments(target)
+    }
+
+    fun loadMoreComments(target: RatingTarget) {
+        if (isLoadingMoreComments) return
+        val current = (commentState as? LoadState.Ready)?.value ?: return
+        val cursor = current.nextPublishTime ?: return
+        val targetKey = target.key
+        if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return
+        moreCommentsJob?.cancel()
+        commentPaginationError = null
+        isLoadingMoreComments = true
+        moreCommentsJob = viewModelScope.launch {
+            try {
+                val result = adapter.getComments(target, cursor)
+                if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
+                if (result.status == AdapterStatus.SUCCESS && result.data != null) {
+                    val next = result.data
+                    val merged = withContext(Dispatchers.Default) {
+                        mergeCommentsByHeat(current.comments, next.comments)
+                    }
+                    commentState = LoadState.Ready(
+                        next.copy(
+                            comments = merged,
+                            totalCount = maxOf(current.totalCount, next.totalCount),
+                            hottestComments = current.hottestComments,
+                        ),
+                    )
+                } else {
+                    commentPaginationError = result.error?.message ?: "加载更多评论失败"
+                }
+            } finally {
+                isLoadingMoreComments = false
+            }
+        }
+    }
+
+    fun requestScore(target: RatingTarget, score: Int) {
+        if (scoringTargetKey != null) return
+        if (!isLoggedIn) {
+            message = "请先在“我的”中登录虎扑"
+            return
+        }
+        submitScore(target, score)
+    }
+
+    fun updateCommentDraft(value: String) {
+        commentDraft = value.take(500)
+    }
+
+    fun publishComment(target: RatingTarget) {
+        if (isPublishingComment) return
+        val content = commentDraft.trim()
+        if (content.isEmpty()) {
+            message = "请先输入评论内容"
+            return
+        }
+        if (!isLoggedIn) {
+            message = "请先在“我的”中登录虎扑"
+            return
+        }
+        isPublishingComment = true
+        viewModelScope.launch {
+            try {
+                val result = adapter.publishComment(target, content)
+                if (result.status == AdapterStatus.SUCCESS) {
+                    commentDraft = ""
+                    message = "评论发布成功"
+                    loadComments(target)
+                } else {
+                    if (result.status == AdapterStatus.AUTH_REQUIRED) isLoggedIn = false
+                    message = result.error?.message ?: "评论发布失败"
+                }
+            } finally {
+                isPublishingComment = false
+            }
+        }
+    }
+
+    fun latestRatingTarget(target: RatingTarget): RatingTarget {
+        val detail = (ratingState as? LoadState.Ready)?.value ?: return target
+        return detail.stages
+            .asSequence()
+            .flatMap { it.targets.asSequence() }
+            .firstOrNull { it.key == target.key }
+            ?: target
+    }
+
+    fun openLogin() {
+        webReturnScreen = screen
+        screen = AppScreen.Web(
+            title = "登录虎扑",
+            url = HupuUrls.loginUrl(),
+            login = true,
+        )
+    }
+
+    fun finishLogin(): Boolean {
+        val authenticated = cookieSession.capture()
+        isLoggedIn = authenticated
+        if (!authenticated) {
+            message = "尚未检测到有效的虎扑登录 Cookie"
+            return false
+        }
+        message = "虎扑登录成功"
+        screen = webReturnScreen
+        return true
+    }
+
+    fun logout() {
+        cookieSession.clear {
+            isLoggedIn = false
+            message = "已清除本机虎扑登录信息"
+        }
+    }
+
+    fun goBack() {
+        val current = screen
+        if (current is AppScreen.Comments) {
+            commentJob?.cancel()
+            moreCommentsJob?.cancel()
+            commentReplies.clear()
+            isLoadingMoreComments = false
+            commentPaginationError = null
+            isPublishingComment = false
+            commentDraft = ""
+        }
+        if (current is AppScreen.Ratings) ratingJob?.cancel()
+        if (current is AppScreen.Stage) stageRatingJob?.cancel()
+        screen = when (current) {
+            AppScreen.Schedule -> AppScreen.Schedule
+            AppScreen.Subscriptions -> AppScreen.Schedule
+            is AppScreen.Ratings -> AppScreen.Schedule
+            is AppScreen.Stage -> if (current.returnToStagePicker) {
+                AppScreen.Ratings(current.match)
+            } else {
+                AppScreen.Schedule
+            }
+            is AppScreen.Comments -> commentsParent
+            is AppScreen.Web -> webReturnScreen
+        }
+    }
+
+    fun dismissMessage() {
+        message = null
+    }
+
+    private fun loadSchedule(force: Boolean = false) {
+        val esport = selectedEsport
+        if (!force) schedules[esport]?.let {
+            scheduleState = LoadState.Ready(it)
+            return
+        }
+        scheduleJob?.cancel()
+        scheduleState = LoadState.Loading
+        scheduleJob = viewModelScope.launch {
+            val nextState = adapter.getSchedule(esport).toLoadState()
+            (nextState as? LoadState.Ready)?.value?.let { schedules[esport] = it }
+            if (selectedEsport == esport) {
+                scheduleState = nextState
+            }
+        }
+    }
+
+    private fun loadRatings(match: MatchSummary) {
+        ratingJob?.cancel()
+        ratingState = LoadState.Loading
+        ratingJob = viewModelScope.launch {
+            val nextState = adapter.getRatings(match).toLoadState()
+            if ((screen as? AppScreen.Ratings)?.match?.id == match.id) {
+                ratingState = nextState
+                val detail = (nextState as? LoadState.Ready)?.value
+                if (detail?.stages?.size == 1) {
+                    val stage = detail.stages.single()
+                    screen = AppScreen.Stage(
+                        match = match,
+                        stage = stage,
+                        stageNumber = 1,
+                        returnToStagePicker = false,
+                    )
+                    loadStageRating(match, stage)
+                }
+            }
+        }
+    }
+
+    private fun loadStageRating(match: MatchSummary, stage: RatingStage) {
+        stageRatingJob?.cancel()
+        stageRatingState = LoadState.Loading
+        val key = "${stage.outBizType ?: match.outBizType}:${stage.outBizNo ?: match.outBizNo}"
+        stageRatingJob = viewModelScope.launch {
+            val nextState = adapter.getStageRatingDetail(match, stage).toLoadState()
+            val current = screen as? AppScreen.Stage
+            val currentKey = current?.let {
+                "${it.stage.outBizType ?: it.match.outBizType}:${it.stage.outBizNo ?: it.match.outBizNo}"
+            }
+            if (currentKey == key) stageRatingState = nextState
+        }
+    }
+
+    private fun loadComments(target: RatingTarget) {
+        commentJob?.cancel()
+        moreCommentsJob?.cancel()
+        commentReplies.clear()
+        isLoadingMoreComments = false
+        commentPaginationError = null
+        commentState = LoadState.Loading
+        val targetKey = target.key
+        commentJob = viewModelScope.launch {
+            val hottestDeferred = async { adapter.getHottestComments(target) }
+            val pageResult = adapter.getComments(target)
+            val hottestResult = hottestDeferred.await()
+            if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
+
+            val page = pageResult.data
+            commentState = if (page != null) {
+                LoadState.Ready(
+                    page.copy(
+                        hottestComments = hottestResult.data.orEmpty(),
+                    ),
+                )
+            } else {
+                pageResult.toLoadState()
+            }
+        }
+    }
+
+    private fun submitScore(target: RatingTarget, score: Int) {
+        val targetKey = "${target.outBizType}:${target.outBizNo}"
+        if (scoringTargetKey != null) return
+        scoringTargetKey = targetKey
+        viewModelScope.launch {
+            try {
+                val result = adapter.submitScore(target, score)
+                if (result.status == AdapterStatus.SUCCESS) {
+                    updateUserScore(target, score)
+                    message = "已提交 ${score / 2} 星评分"
+                } else {
+                    if (result.status == AdapterStatus.AUTH_REQUIRED) isLoggedIn = false
+                    message = result.error?.message ?: "评分失败"
+                }
+            } finally {
+                if (scoringTargetKey == targetKey) scoringTargetKey = null
+            }
+        }
+    }
+
+    private fun updateUserScore(target: RatingTarget, score: Int) {
+        val detail = (ratingState as? LoadState.Ready)?.value ?: return
+        ratingState = LoadState.Ready(
+            detail.copy(
+                stages = detail.stages.map { stage ->
+                    stage.copy(
+                        targets = stage.targets.map {
+                            if (it.outBizType == target.outBizType && it.outBizNo == target.outBizNo) {
+                                it.copy(userScore = score)
+                            } else {
+                                it
+                            }
+                        },
+                    )
+                },
+            ),
+        )
+        val stageDetail = (stageRatingState as? LoadState.Ready)?.value ?: return
+        fun update(candidate: RatingTarget): RatingTarget =
+            if (candidate.outBizType == target.outBizType && candidate.outBizNo == target.outBizNo) {
+                candidate.copy(userScore = score)
+            } else {
+                candidate
+            }
+        stageRatingState = LoadState.Ready(
+            stageDetail.copy(
+                targets = stageDetail.targets.map(::update),
+                groups = stageDetail.groups.map { group -> group.copy(targets = group.targets.map(::update)) },
+            ),
+        )
+    }
+
+    private fun <T> AdapterResult<T>.toLoadState(): LoadState<T> = data?.let(LoadState<T>::Ready)
+        ?: LoadState.Failed(
+            message = error?.message ?: "未知错误",
+            retryable = error?.retryable == true,
+        )
+
+    private val RatingTarget.key: String
+        get() = "$outBizType:$outBizNo"
+}
