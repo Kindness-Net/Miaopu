@@ -69,7 +69,11 @@ internal fun ScheduleDateStrip(
                 cornerRadius = 16.dp,
                 colors = CardDefaults.defaultColors(
                     color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer,
-                    contentColor = if (selected) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurface,
+                    contentColor = if (selected) {
+                        MiuixTheme.colorScheme.onPrimary
+                    } else {
+                        MiuixTheme.colorScheme.onSurfaceContainer
+                    },
                 ),
                 onClick = { onDaySelected(index) },
                 pressFeedbackType = PressFeedbackType.Sink,
@@ -103,8 +107,6 @@ internal fun ScheduleDayBand(day: ScheduleDay, isFocused: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MiuixTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 13.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

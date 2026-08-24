@@ -42,7 +42,6 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 fun MatchStageCard(
     match: MatchSummary,
     stage: RatingStage,
-    stageNumber: Int,
     onClick: () -> Unit,
     onPlayerClick: (RatingTarget) -> Unit,
 ) {
@@ -53,7 +52,7 @@ fun MatchStageCard(
             .padding(horizontal = 16.dp, vertical = 7.dp)
             .semantics {
                 role = Role.Button
-                contentDescription = "查看第 $stageNumber 局，${stage.targetCount} 个评分对象"
+                contentDescription = "查看${stage.name}，${stage.targetCount} 个评分对象"
             },
         insideMargin = PaddingValues(vertical = 16.dp),
         cornerRadius = 22.dp,
@@ -65,21 +64,6 @@ fun MatchStageCard(
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .clip(RoundedCornerShape(15.dp))
-                    .background(MiuixTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stageNumber.toString(),
-                    color = MiuixTheme.colorScheme.onPrimary,
-                    style = MiuixTheme.textStyles.title2,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = stage.name,

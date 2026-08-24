@@ -38,7 +38,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun RatingsScreen(viewModel: MiaopuViewModel, match: MatchSummary) {
     BackHandler(onBack = viewModel::goBack)
     Scaffold(
-        containerColor = MiuixTheme.colorScheme.background,
+        containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
             SmallTopAppBar(
                 title = "选手评分",
@@ -79,7 +79,6 @@ fun RatingsScreen(viewModel: MiaopuViewModel, match: MatchSummary) {
                             MatchStageCard(
                                 match = match,
                                 stage = stage,
-                                stageNumber = index + 1,
                                 onClick = { viewModel.openStage(match, stage, index + 1) },
                                 onPlayerClick = viewModel::openComments,
                             )

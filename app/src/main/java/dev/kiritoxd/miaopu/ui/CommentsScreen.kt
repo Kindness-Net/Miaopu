@@ -44,7 +44,7 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
     val listState = rememberLazyListState()
     val currentTarget = viewModel.latestRatingTarget(target)
     Scaffold(
-        containerColor = MiuixTheme.colorScheme.background,
+        containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
             SmallTopAppBar(
                 title = "选手详情",

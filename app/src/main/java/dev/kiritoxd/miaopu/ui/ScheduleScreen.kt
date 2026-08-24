@@ -70,7 +70,7 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
         viewModel.selectMainSection(MainSection.HOME)
     }
     Scaffold(
-        containerColor = MiuixTheme.colorScheme.background,
+        containerColor = MiuixTheme.colorScheme.surface,
         bottomBar = {
             MainNavigationBar(
                 selected = viewModel.selectedMainSection,
@@ -346,13 +346,6 @@ private fun HomeHeader(viewModel: MiaopuViewModel) {
             ) {
                 Icon(MiuixIcons.Refresh, contentDescription = "刷新赛程")
             }
-            Spacer(Modifier.width(8.dp))
-            IconButton(
-                onClick = { viewModel.selectMainSection(MainSection.PROFILE) },
-                backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
-            ) {
-                Icon(MiuixIcons.ContactsCircle, contentDescription = "我的账号")
-            }
         },
     )
     EsportSelector(viewModel)
@@ -383,7 +376,7 @@ private fun EsportSelector(viewModel: MiaopuViewModel) {
         selectedTabIndex = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0),
         onTabSelected = { viewModel.selectEsport(subscriptions[it]) },
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        colors = flatTabRowColors(),
+        colors = dataSourceTabRowColors(),
     )
 }
 

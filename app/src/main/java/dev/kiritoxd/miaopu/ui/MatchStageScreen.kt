@@ -42,7 +42,6 @@ import dev.kiritoxd.miaopu.data.RatingStage
 import dev.kiritoxd.miaopu.data.RatingTarget
 import dev.kiritoxd.miaopu.data.StageRatingDetail
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -72,7 +71,7 @@ fun MatchStageScreen(
 ) {
     BackHandler(onBack = viewModel::goBack)
     Scaffold(
-        containerColor = MiuixTheme.colorScheme.background,
+        containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
             SmallTopAppBar(
                 title = "单局详情",
@@ -282,10 +281,6 @@ private fun OfficialRatingTargetCard(target: RatingTarget, onClick: () -> Unit) 
         },
         insideMargin = PaddingValues(0.dp),
         cornerRadius = 18.dp,
-        colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.surface,
-            contentColor = MiuixTheme.colorScheme.onSurface,
-        ),
         pressFeedbackType = PressFeedbackType.Sink,
         showIndication = true,
         onClick = onClick,

@@ -47,6 +47,13 @@ internal fun flatTabRowColors(): TabRowColors = TabRowDefaults.tabRowColors(
 )
 
 @Composable
+internal fun dataSourceTabRowColors(): TabRowColors = TabRowDefaults.tabRowColors(
+    backgroundColor = Color.Transparent,
+    selectedBackgroundColor = MiuixTheme.colorScheme.primary,
+    selectedContentColor = MiuixTheme.colorScheme.onPrimary,
+)
+
+@Composable
 internal fun PageHeading(
     eyebrow: String,
     title: String,

@@ -40,7 +40,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun SubscriptionScreen(viewModel: MiaopuViewModel) {
     BackHandler(onBack = viewModel::goBack)
     Scaffold(
-        containerColor = MiuixTheme.colorScheme.background,
+        containerColor = MiuixTheme.colorScheme.surface,
         topBar = {
             SmallTopAppBar(
                 title = "赛事订阅",
