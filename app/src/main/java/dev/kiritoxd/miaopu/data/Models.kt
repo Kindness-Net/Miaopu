@@ -104,6 +104,7 @@ data class RatingTarget(
     val finalStatus: String? = null,
     val infoAttributes: Map<String, List<String>> = emptyMap(),
     val hotCommentPreviews: List<HupuComment> = emptyList(),
+    val championImageUrl: String? = null,
 )
 
 data class RatingStage(

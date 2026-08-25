@@ -296,6 +296,8 @@ object HupuJsonParser {
             finalStatus = stringOrNull("finalStatus"),
             infoAttributes = info?.arrayAttributes().orEmpty(),
             hotCommentPreviews = parseComments(optJSONArray("hotCommentModels")),
+            championImageUrl = info?.firstArrayString("auxiliaryPic")
+                ?.takeIf { bizType == "lol_item" },
         )
     }
 

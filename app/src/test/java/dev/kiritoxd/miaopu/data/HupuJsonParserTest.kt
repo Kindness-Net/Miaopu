@@ -49,6 +49,7 @@ class HupuJsonParserTest {
         assertEquals(120, target.commentCount)
         assertEquals(108, target.directCommentCount)
         assertEquals(listOf("11"), target.infoAttributes["killCount"])
+        assertEquals("https://example.com/champion.png", target.championImageUrl)
         assertEquals("hot-preview", target.hotCommentPreviews.single().id)
         assertEquals("lol_bo", detail.stages.single().outBizType)
         assertEquals("6581", detail.stages.single().outBizNo)
@@ -221,7 +222,7 @@ class HupuJsonParserTest {
                   "subNodes":[{"node":{
                     "bizType":"lol_item","bizId":"71707","name":"Karis",
                     "image":["https://example.com/k.png"],
-                    "infoJson":{"desc":["K/D/A:11/3/10"],"label":[{"text":"关键先生"}],"killCount":[11]},
+                    "infoJson":{"desc":["K/D/A:11/3/10"],"label":[{"text":"关键先生"}],"killCount":[11],"auxiliaryPic":["https://example.com/champion.png"]},
                     "scoreAvg":9.9,"scorePersonCount":1687,"commentCount":108,"summedCommentCount":120,
                     "scoreDistribution":{"2":10,"4":12,"6":20,"8":45,"10":1600},
                     "canScore":true,"canComment":true,"hottestComments":["可惜差一个兵"],

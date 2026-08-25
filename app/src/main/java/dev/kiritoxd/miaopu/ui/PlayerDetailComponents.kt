@@ -28,13 +28,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import dev.kiritoxd.miaopu.data.RatingTarget
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -54,29 +52,13 @@ internal fun PlayerIdentityCard(target: RatingTarget, onCommentClick: () -> Unit
         cornerRadius = 22.dp,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(88.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MiuixTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (target.imageUrl.isNullOrBlank()) {
-                    Text(
-                        target.name.take(1),
-                        color = MiuixTheme.colorScheme.primary,
-                        style = MiuixTheme.textStyles.title1,
-                        fontWeight = FontWeight.Bold,
-                    )
-                } else {
-                    AsyncImage(
-                        model = target.imageUrl,
-                        contentDescription = "${target.name}头像",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                    )
-                }
-            }
+            RatingTargetPortrait(
+                target = target,
+                size = 88.dp,
+                cornerRadius = 20.dp,
+                championSize = 31.dp,
+                contentDescription = "${target.name}头像",
+            )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(

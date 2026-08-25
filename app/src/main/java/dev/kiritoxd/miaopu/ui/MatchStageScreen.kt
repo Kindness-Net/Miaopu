@@ -323,7 +323,12 @@ private fun OfficialRatingTargetCard(target: RatingTarget, onClick: () -> Unit) 
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TargetPortrait(target)
+            RatingTargetPortrait(
+                target = target,
+                size = 68.dp,
+                cornerRadius = 12.dp,
+                championSize = 25.dp,
+            )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -378,31 +383,6 @@ private fun OfficialRatingTargetCard(target: RatingTarget, onClick: () -> Unit) 
                 overflow = TextOverflow.Ellipsis,
                 style = MiuixTheme.textStyles.footnote1,
                 color = HupuCommentText,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TargetPortrait(target: RatingTarget) {
-    Box(
-        modifier = Modifier.size(68.dp).clip(RoundedCornerShape(12.dp))
-            .background(MiuixTheme.colorScheme.surfaceContainerHigh),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (target.imageUrl.isNullOrBlank()) {
-            Text(
-                text = target.name.take(1),
-                color = MiuixTheme.colorScheme.primary,
-                style = MiuixTheme.textStyles.title2,
-                fontWeight = FontWeight.Bold,
-            )
-        } else {
-            AsyncImage(
-                model = target.imageUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
             )
         }
     }

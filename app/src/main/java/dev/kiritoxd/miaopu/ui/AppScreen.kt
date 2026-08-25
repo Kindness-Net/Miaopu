@@ -103,6 +103,7 @@ internal data class RatingTargetRoute(
     val visible: Boolean,
     val deleted: Boolean,
     val finalStatus: String?,
+    val championImageUrl: String? = null,
 ) {
     val key: String get() = "$outBizType:$outBizNo"
 }
@@ -182,6 +183,7 @@ internal fun RatingTarget.toRoute(): RatingTargetRoute = RatingTargetRoute(
     visible = visible,
     deleted = deleted,
     finalStatus = finalStatus,
+    championImageUrl = championImageUrl,
 )
 
 internal fun RatingTargetRoute.toModel(): RatingTarget = RatingTarget(
@@ -207,6 +209,7 @@ internal fun RatingTargetRoute.toModel(): RatingTarget = RatingTarget(
     visible = visible,
     deleted = deleted,
     finalStatus = finalStatus,
+    championImageUrl = championImageUrl,
 )
 
 private fun Team.toRoute(): TeamRoute = TeamRoute(
