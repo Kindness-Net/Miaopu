@@ -79,6 +79,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     private val initialSubscriptions = subscriptionStore.subscriptions()
     private val schedules = mutableMapOf<Esport, Schedule>()
     private val scheduleViewports = mutableMapOf<Esport, ScheduleViewportSnapshot>()
+    private val stageViewports = mutableMapOf<String, StageViewportSnapshot>()
 
     var screen: AppScreen by mutableStateOf(AppScreen.Schedule)
         private set
@@ -199,6 +200,17 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
         scheduleViewports[esport] = snapshot
     }
 
+    internal fun stageViewport(match: MatchSummary, stage: RatingStage): StageViewportSnapshot? =
+        stageViewports[stageViewportKey(match, stage)]
+
+    internal fun saveStageViewport(
+        match: MatchSummary,
+        stage: RatingStage,
+        snapshot: StageViewportSnapshot,
+    ) {
+        stageViewports[stageViewportKey(match, stage)] = snapshot
+    }
+
     fun openMatch(match: MatchSummary) {
         val ratings = AppScreen.Ratings(match)
         screen = ratings
@@ -206,6 +218,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun openStage(match: MatchSummary, stage: RatingStage, stageNumber: Int) {
+        stageViewports.remove(stageViewportKey(match, stage))
         screen = AppScreen.Stage(
             match = match,
             stage = stage,
@@ -393,6 +406,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
                 val detail = (nextState as? LoadState.Ready)?.value
                 if (detail?.stages?.size == 1) {
                     val stage = detail.stages.single()
+                    stageViewports.remove(stageViewportKey(match, stage))
                     screen = AppScreen.Stage(
                         match = match,
                         stage = stage,
@@ -506,4 +520,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
 
     private val RatingTarget.key: String
         get() = "$outBizType:$outBizNo"
+
+    private fun stageViewportKey(match: MatchSummary, stage: RatingStage): String =
+        "${match.id}:${stage.outBizType ?: match.outBizType}:${stage.outBizNo ?: match.outBizNo}"
 }

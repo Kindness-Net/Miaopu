@@ -15,13 +15,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,6 +100,8 @@ fun MatchStageScreen(
                 stage = stage,
                 modifier = Modifier.padding(innerPadding),
                 onTargetClick = viewModel::openComments,
+                savedViewport = viewModel.stageViewport(match, stage),
+                onSaveViewport = { viewModel.saveStageViewport(match, stage, it) },
             )
         }
     }
@@ -110,6 +114,8 @@ private fun StageRatingContent(
     stage: RatingStage,
     modifier: Modifier,
     onTargetClick: (RatingTarget) -> Unit,
+    savedViewport: StageViewportSnapshot?,
+    onSaveViewport: (StageViewportSnapshot) -> Unit,
 ) {
     val tabs = remember(detail) {
         buildList {
@@ -119,8 +125,12 @@ private fun StageRatingContent(
             }
         }
     }
-    var selectedTabIndex by rememberSaveable(detail.title) { mutableIntStateOf(0) }
-    var selectedOrderIndex by rememberSaveable(detail.title, "order") { mutableIntStateOf(0) }
+    var selectedTabIndex by remember(detail) {
+        mutableIntStateOf(savedViewport?.selectedTabIndex ?: 0)
+    }
+    var selectedOrderIndex by remember(detail) {
+        mutableIntStateOf(savedViewport?.selectedOrderIndex ?: 0)
+    }
     val currentTabIndex = selectedTabIndex.coerceIn(0, tabs.lastIndex.coerceAtLeast(0))
     val currentOrderIndex = selectedOrderIndex.coerceIn(0, StageTargetOrder.entries.lastIndex)
     val selectedTab = tabs[currentTabIndex]
@@ -136,6 +146,34 @@ private fun StageRatingContent(
                 compareBy<RatingTarget> { if (it.scoreCount == 0) 1 else 0 }
                     .thenBy { it.scoreAverage }
                     .thenByDescending { it.scoreCount },
+            )
+        }
+    }
+    val restoredViewport = remember(savedViewport, tabs.size, visibleTargets.size) {
+        savedViewport?.coerceFor(
+            tabCount = tabs.size,
+            orderCount = StageTargetOrder.entries.size,
+            itemCount = visibleTargets.size,
+        )
+    }
+    val listState = remember(detail) {
+        LazyListState(
+            firstVisibleItemIndex = restoredViewport?.listIndex ?: 0,
+            firstVisibleItemScrollOffset = restoredViewport?.listOffset ?: 0,
+        )
+    }
+    val latestTabIndex by rememberUpdatedState(currentTabIndex)
+    val latestOrderIndex by rememberUpdatedState(currentOrderIndex)
+
+    DisposableEffect(detail, listState) {
+        onDispose {
+            onSaveViewport(
+                StageViewportSnapshot(
+                    listIndex = listState.firstVisibleItemIndex,
+                    listOffset = listState.firstVisibleItemScrollOffset,
+                    selectedTabIndex = latestTabIndex,
+                    selectedOrderIndex = latestOrderIndex,
+                ),
             )
         }
     }
@@ -176,6 +214,7 @@ private fun StageRatingContent(
             EmptyPane("这个分组暂时没有评分对象", Modifier.weight(1f))
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),

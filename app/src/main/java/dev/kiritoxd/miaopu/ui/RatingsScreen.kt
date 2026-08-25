@@ -77,7 +77,6 @@ fun RatingsScreen(viewModel: MiaopuViewModel, match: MatchSummary) {
                             contentType = { _, _ -> "stage" },
                         ) { index, stage ->
                             MatchStageCard(
-                                match = match,
                                 stage = stage,
                                 onClick = { viewModel.openStage(match, stage, index + 1) },
                                 onPlayerClick = viewModel::openComments,

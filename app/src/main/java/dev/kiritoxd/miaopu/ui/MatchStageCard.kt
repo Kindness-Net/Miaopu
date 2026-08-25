@@ -29,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.kiritoxd.miaopu.data.RatingStage
-import dev.kiritoxd.miaopu.data.MatchSummary
 import dev.kiritoxd.miaopu.data.RatingTarget
 import coil3.compose.AsyncImage
 import top.yukonga.miuix.kmp.basic.Card
@@ -40,7 +39,6 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 fun MatchStageCard(
-    match: MatchSummary,
     stage: RatingStage,
     onClick: () -> Unit,
     onPlayerClick: (RatingTarget) -> Unit,
@@ -69,16 +67,6 @@ fun MatchStageCard(
                     text = stage.name,
                     style = MiuixTheme.textStyles.title3,
                     fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = match.introduction.ifBlank {
-                        match.teams.joinToString(" vs ") { it.name }.ifBlank { match.name }
-                    },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MiuixTheme.textStyles.footnote2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
