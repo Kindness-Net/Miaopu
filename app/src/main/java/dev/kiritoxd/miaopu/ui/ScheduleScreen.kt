@@ -1,5 +1,12 @@
 package dev.kiritoxd.miaopu.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Column
@@ -55,7 +62,6 @@ import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.NavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TabRow
@@ -85,24 +91,55 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
             )
         },
     ) { innerPadding ->
-        if (viewModel.selectedMainSection == MainSection.PROFILE) {
-            ProfileContent(viewModel = viewModel, innerPadding = innerPadding)
-            return@Scaffold
-        }
-
-        when (val state = viewModel.scheduleState) {
-            LoadState.Loading -> ScheduleLoadingContent(viewModel, innerPadding)
-            is LoadState.Failed -> ErrorPane(
-                message = state.message,
-                retryable = state.retryable,
-                onRetry = viewModel::retry,
-                modifier = Modifier.padding(innerPadding),
+        AnimatedContent(
+            targetState = viewModel.selectedMainSection,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                val enter = slideInHorizontally(
+                    animationSpec = tween(durationMillis = 300),
+                    initialOffsetX = { fullWidth -> direction * fullWidth / 5 },
+                ) + fadeIn(animationSpec = tween(durationMillis = 240))
+                val exit = slideOutHorizontally(
+                    animationSpec = tween(durationMillis = 300),
+                    targetOffsetX = { fullWidth -> -direction * fullWidth / 5 },
+                ) + fadeOut(animationSpec = tween(durationMillis = 180))
+                enter togetherWith exit
+            },
+            label = "main-section",
+        ) { section ->
+            MainSectionContent(
+                viewModel = viewModel,
+                section = section,
+                innerPadding = innerPadding,
             )
-            is LoadState.Ready -> when (viewModel.selectedMainSection) {
-                MainSection.HOME -> HomeContent(viewModel, state.value, innerPadding)
-                MainSection.EVENTS -> EventsContent(viewModel, state.value, innerPadding)
-                MainSection.PROFILE -> Unit
-            }
+        }
+    }
+}
+
+@Composable
+private fun MainSectionContent(
+    viewModel: MiaopuViewModel,
+    section: MainSection,
+    innerPadding: PaddingValues,
+) {
+    if (section == MainSection.PROFILE) {
+        ProfileContent(viewModel = viewModel, innerPadding = innerPadding)
+        return
+    }
+
+    when (val state = viewModel.scheduleState) {
+        LoadState.Loading -> ScheduleLoadingContent(viewModel, innerPadding, section)
+        is LoadState.Failed -> ErrorPane(
+            message = state.message,
+            retryable = state.retryable,
+            onRetry = viewModel::retry,
+            modifier = Modifier.padding(innerPadding),
+        )
+        is LoadState.Ready -> when (section) {
+            MainSection.HOME -> HomeContent(viewModel, state.value, innerPadding)
+            MainSection.EVENTS -> EventsContent(viewModel, state.value, innerPadding)
+            MainSection.PROFILE -> Unit
         }
     }
 }
@@ -111,13 +148,14 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
 private fun ScheduleLoadingContent(
     viewModel: MiaopuViewModel,
     innerPadding: PaddingValues,
+    section: MainSection,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(top = innerPadding.calculateTopPadding()),
     ) {
-        when (viewModel.selectedMainSection) {
+        when (section) {
             MainSection.HOME -> HomeHeader(viewModel)
             MainSection.EVENTS -> EventsHeader(viewModel)
             MainSection.PROFILE -> Unit
@@ -134,10 +172,7 @@ private fun MainNavigationBar(
     selected: MainSection,
     onSelect: (MainSection) -> Unit,
 ) {
-    NavigationBar(
-        showDivider = false,
-        mode = NavigationBarDisplayMode.IconWithSelectedLabel,
-    ) {
+    NavigationBar(showDivider = false) {
         NavigationBarItem(
             selected = selected == MainSection.HOME,
             onClick = { onSelect(MainSection.HOME) },
