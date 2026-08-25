@@ -6,6 +6,48 @@ import java.util.Calendar
 
 class ScheduleFocusTest {
     @Test
+    fun `merges esports by date and match time`() {
+        val lol = scheduleOf(
+            day(
+                "2026-08-24",
+                match("lol-late", "未开始", time(24, 20), Esport.LOL),
+                match("lol-early", "已结束", time(24, 10), Esport.LOL),
+            ),
+        )
+        val kog = scheduleOf(
+            day(
+                "2026-08-24",
+                match("kog-middle", "未开始", time(24, 16), Esport.KOG),
+            ),
+            day("2026-08-25", match("kog-next", "未开始", time(25, 18), Esport.KOG)),
+        )
+
+        val merged = mergeSchedules(listOf(lol, kog))
+
+        assertEquals(listOf("2026-08-24", "2026-08-25"), merged.days.map { it.date })
+        assertEquals(
+            listOf("lol-early", "kog-middle", "lol-late", "kog-next"),
+            merged.days.flatMap { it.matches }.map { it.id },
+        )
+        assertEquals(
+            listOf(Esport.LOL, Esport.KOG, Esport.LOL, Esport.KOG),
+            merged.days.flatMap { it.matches }.map { it.esport },
+        )
+    }
+
+    @Test
+    fun `keeps same match ids from different esports`() {
+        val merged = mergeSchedules(
+            listOf(
+                scheduleOf(day("2026-08-24", match("shared", "未开始", time(24, 10), Esport.LOL))),
+                scheduleOf(day("2026-08-24", match("shared", "未开始", time(24, 11), Esport.KOG))),
+            ),
+        )
+
+        assertEquals(2, merged.days.single().matches.size)
+    }
+
+    @Test
     fun `home keeps every match from two days before through two days after`() {
         val schedule = scheduleOf(
             day("2026-08-21", match("too-old", "已结束", time(21, 10))),
@@ -65,7 +107,7 @@ class ScheduleFocusTest {
     }
 
     @Test
-    fun `home initial list item is today's day header with history retained above`() {
+    fun `home initial list item keeps the two prior matches above the next match`() {
         val schedule = scheduleOf(
             day("2026-08-22", match("two-days-ago", "已结束", time(22, 10))),
             day("2026-08-23", match("yesterday", "已结束", time(23, 10))),
@@ -77,28 +119,28 @@ class ScheduleFocusTest {
             day("2026-08-25", match("tomorrow", "未开始", time(25, 18))),
         )
 
-        assertEquals(4, schedule.homeInitialItemIndex(time(24, 16)))
+        assertEquals(3, schedule.focusInitialItemIndex(time(24, 16)))
     }
 
     @Test
-    fun `home initial list item uses yesterday when today has no matches`() {
+    fun `home initial list item keeps two prior matches when today has no matches`() {
         val schedule = scheduleOf(
             day("2026-08-22", match("two-days-ago", "已结束", time(22, 10))),
             day("2026-08-23", match("yesterday", "已结束", time(23, 10))),
             day("2026-08-25", match("tomorrow", "未开始", time(25, 18))),
         )
 
-        assertEquals(2, schedule.homeInitialItemIndex(time(24, 16)))
+        assertEquals(1, schedule.focusInitialItemIndex(time(24, 16)))
     }
 
     @Test
-    fun `home initial list item uses the latest available past day`() {
+    fun `home initial list item keeps the only prior match`() {
         val schedule = scheduleOf(
             day("2026-08-22", match("two-days-ago", "已结束", time(22, 10))),
             day("2026-08-25", match("tomorrow", "未开始", time(25, 18))),
         )
 
-        assertEquals(0, schedule.homeInitialItemIndex(time(24, 16)))
+        assertEquals(1, schedule.focusInitialItemIndex(time(24, 16)))
     }
 
     @Test
@@ -108,7 +150,48 @@ class ScheduleFocusTest {
             day("2026-08-26", match("two-days-ahead", "未开始", time(26, 18))),
         )
 
-        assertEquals(0, schedule.homeInitialItemIndex(time(24, 16)))
+        assertEquals(0, schedule.focusInitialItemIndex(time(24, 16)))
+    }
+
+    @Test
+    fun `home initial list item prioritizes a live match over an upcoming match`() {
+        val schedule = scheduleOf(
+            day(
+                "2026-08-24",
+                match("oldest", "已结束", time(24, 10)),
+                match("recent", "已结束", time(24, 12)),
+                match("live", "进行中", time(24, 14)),
+                match("upcoming", "未开始", time(24, 18)),
+            ),
+        )
+
+        assertEquals(1, schedule.focusInitialItemIndex(time(24, 16)))
+    }
+
+    @Test
+    fun `focus uses the earliest upcoming match even when source order differs`() {
+        val schedule = scheduleOf(
+            day(
+                "2026-08-24",
+                match("later", "未开始", time(24, 20)),
+                match("next", "未开始", time(24, 18)),
+            ),
+        )
+
+        assertEquals("next", schedule.focusMatchId(time(24, 16)))
+    }
+
+    @Test
+    fun `home initial list item can point directly at focus without prior slots`() {
+        val schedule = scheduleOf(
+            day(
+                "2026-08-24",
+                match("ended", "已结束", time(24, 10)),
+                match("next", "未开始", time(24, 18)),
+            ),
+        )
+
+        assertEquals(2, schedule.focusInitialItemIndex(time(24, 16), previousMatchCount = 0))
     }
 
     @Test
@@ -153,9 +236,14 @@ class ScheduleFocusTest {
         matches = matches.toList(),
     )
 
-    private fun match(id: String, status: String, start: Long) = MatchSummary(
+    private fun match(
+        id: String,
+        status: String,
+        start: Long,
+        esport: Esport = Esport.LOL,
+    ) = MatchSummary(
         id = id,
-        esport = Esport.LOL,
+        esport = esport,
         name = id,
         introduction = "",
         status = status,

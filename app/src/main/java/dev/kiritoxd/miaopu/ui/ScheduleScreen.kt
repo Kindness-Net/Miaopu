@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -43,9 +44,9 @@ import dev.kiritoxd.miaopu.data.Esport
 import dev.kiritoxd.miaopu.data.EsportCatalog
 import dev.kiritoxd.miaopu.data.Schedule
 import dev.kiritoxd.miaopu.data.focusMatchId
-import dev.kiritoxd.miaopu.data.fullScheduleInitialDayIndex
-import dev.kiritoxd.miaopu.data.homeInitialItemIndex
+import dev.kiritoxd.miaopu.data.focusInitialItemIndex
 import dev.kiritoxd.miaopu.data.homeWindowAround
+import dev.kiritoxd.miaopu.data.mergeSchedules
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -129,18 +130,52 @@ private fun MainSectionContent(
     innerPadding: PaddingValues,
 ) {
     when (section) {
-        MainSection.HOME,
-        MainSection.EVENTS,
-        -> EsportSectionContent(viewModel, section, subscriptions, innerPadding)
-
+        MainSection.HOME -> HomeSectionContent(viewModel, subscriptions, innerPadding)
+        MainSection.EVENTS -> EventsSectionContent(viewModel, subscriptions, innerPadding)
         MainSection.PROFILE -> ProfileContent(viewModel = viewModel, innerPadding = innerPadding)
     }
 }
 
 @Composable
-private fun EsportSectionContent(
+private fun HomeSectionContent(
     viewModel: MiaopuViewModel,
-    section: MainSection,
+    subscriptions: List<Esport>,
+    innerPadding: PaddingValues,
+) {
+    val states = subscriptions.map(viewModel::scheduleStateFor)
+    val readySchedules = states.mapNotNull { state -> (state as? LoadState.Ready)?.value }
+    val failedStates = states.filterIsInstance<LoadState.Failed>()
+    val mergedSchedule = remember(readySchedules) { mergeSchedules(readySchedules) }
+    val bottomPadding = innerPadding.calculateBottomPadding()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = innerPadding.calculateTopPadding()),
+    ) {
+        HomeHeader(viewModel)
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            when {
+                states.any { it is LoadState.Loading } -> LoadingPane(
+                    label = "正在合并已订阅赛事",
+                    modifier = Modifier.fillMaxSize().padding(bottom = bottomPadding),
+                )
+                mergedSchedule.days.isNotEmpty() -> HomeContent(viewModel, mergedSchedule, bottomPadding)
+                failedStates.isNotEmpty() -> ErrorPane(
+                    message = failedStates.first().message,
+                    retryable = failedStates.any(LoadState.Failed::retryable),
+                    onRetry = viewModel::refreshHomeSchedules,
+                    modifier = Modifier.fillMaxSize().padding(bottom = bottomPadding),
+                )
+                else -> HomeContent(viewModel, mergedSchedule, bottomPadding)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EventsSectionContent(
+    viewModel: MiaopuViewModel,
     subscriptions: List<Esport>,
     innerPadding: PaddingValues,
 ) {
@@ -173,11 +208,7 @@ private fun EsportSectionContent(
             .fillMaxSize()
             .padding(top = innerPadding.calculateTopPadding()),
     ) {
-        when (section) {
-            MainSection.HOME -> HomeHeader(viewModel, visibleEsport)
-            MainSection.EVENTS -> EventsHeader(viewModel, visibleEsport)
-            MainSection.PROFILE -> Unit
-        }
+        EventsHeader(viewModel, visibleEsport)
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -185,9 +216,8 @@ private fun EsportSectionContent(
                 .weight(1f),
             key = { page -> subscriptions[page].businessId },
         ) { page ->
-            EsportPageContent(
+            EventsPageContent(
                 viewModel = viewModel,
-                section = section,
                 esport = subscriptions[page],
                 innerPadding = innerPadding,
             )
@@ -196,9 +226,8 @@ private fun EsportSectionContent(
 }
 
 @Composable
-private fun EsportPageContent(
+private fun EventsPageContent(
     viewModel: MiaopuViewModel,
-    section: MainSection,
     esport: Esport,
     innerPadding: PaddingValues,
 ) {
@@ -215,11 +244,7 @@ private fun EsportPageContent(
             onRetry = viewModel::retry,
             modifier = Modifier.fillMaxSize().padding(bottom = bottomPadding),
         )
-        is LoadState.Ready -> when (section) {
-            MainSection.HOME -> HomeContent(viewModel, state.value, esport, bottomPadding)
-            MainSection.EVENTS -> EventsContent(viewModel, state.value, esport, bottomPadding)
-            MainSection.PROFILE -> Unit
-        }
+        is LoadState.Ready -> EventsContent(viewModel, state.value, esport, bottomPadding)
     }
 }
 
@@ -254,7 +279,6 @@ private fun MainNavigationBar(
 private fun HomeContent(
     viewModel: MiaopuViewModel,
     schedule: Schedule,
-    esport: Esport,
     bottomPadding: Dp,
 ) {
     val nowMillis = remember(schedule) { System.currentTimeMillis() }
@@ -264,8 +288,10 @@ private fun HomeContent(
         EmptyPane("暂无赛程数据", Modifier.fillMaxSize().padding(bottom = bottomPadding))
         return
     }
-    val listState = rememberSaveable(esport.businessId, saver = LazyListState.Saver) {
-        LazyListState(firstVisibleItemIndex = homeSchedule.homeInitialItemIndex(nowMillis))
+    val listState = key("merged-home-feed-v3") {
+        rememberSaveable(saver = LazyListState.Saver) {
+            LazyListState(firstVisibleItemIndex = homeSchedule.focusInitialItemIndex(nowMillis))
+        }
     }
 
     LaunchedEffect(homeSchedule, listState) {
@@ -289,10 +315,15 @@ private fun HomeContent(
             }
             itemsIndexed(
                 items = day.matches,
-                key = { index, match -> "home-${day.date}-${match.id}-$index" },
+                key = { index, match ->
+                    "home-${day.date}-${match.esport.businessId}-${match.id}-$index"
+                },
                 contentType = { _, _ -> "schedule-match" },
             ) { _, match ->
-                HupuScheduleMatchCard(match = match, onClick = { viewModel.openMatch(match) })
+                HupuScheduleMatchCard(
+                    match = match,
+                    onClick = { viewModel.openMatch(match) },
+                )
             }
         }
     }
@@ -325,13 +356,16 @@ private fun EventsContent(
             }
         }
     }
-    val initialDayIndex = remember(schedule, nowMillis) { schedule.fullScheduleInitialDayIndex(nowMillis) }
+    val initialListIndex = remember(schedule, nowMillis) { schedule.focusInitialItemIndex(nowMillis) }
+    val initialDayIndex = remember(schedule, initialListIndex) {
+        dayItemIndices.indexOfLast { it <= initialListIndex }.coerceAtLeast(0)
+    }
     val savedViewport = remember(esport, schedule) { viewModel.scheduleViewport(esport) }
     val totalListItems = remember(schedule) { schedule.days.sumOf { 1 + it.matches.size } }
     val restoredListIndex = savedViewport?.listIndex?.coerceIn(0, (totalListItems - 1).coerceAtLeast(0))
-    val listState = rememberSaveable(esport.businessId, "events-list", saver = LazyListState.Saver) {
+    val listState = rememberSaveable(esport.businessId, "events-list-v2", saver = LazyListState.Saver) {
         LazyListState(
-            firstVisibleItemIndex = restoredListIndex ?: dayItemIndices.getOrElse(initialDayIndex) { 0 },
+            firstVisibleItemIndex = restoredListIndex ?: initialListIndex,
             firstVisibleItemScrollOffset = savedViewport?.listOffset?.coerceAtLeast(0) ?: 0,
         )
     }
@@ -406,20 +440,19 @@ private fun EventsContent(
 }
 
 @Composable
-private fun HomeHeader(viewModel: MiaopuViewModel, esport: Esport) {
+private fun HomeHeader(viewModel: MiaopuViewModel) {
     PageHeading(
         eyebrow = "HUPU ESPORTS",
         title = "近期赛程",
         actions = {
             IconButton(
-                onClick = viewModel::refreshSchedule,
+                onClick = viewModel::refreshHomeSchedules,
                 backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
             ) {
                 Icon(MiuixIcons.Refresh, contentDescription = "刷新赛程")
             }
         },
     )
-    EsportSelector(viewModel, esport)
 }
 
 @Composable

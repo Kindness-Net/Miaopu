@@ -27,6 +27,7 @@ import dev.kiritoxd.miaopu.data.Schedule
 import dev.kiritoxd.miaopu.data.StageRatingDetail
 import dev.kiritoxd.miaopu.data.mergeCommentsByHeat
 import dev.kiritoxd.miaopu.data.isNewerVersion
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -81,8 +82,7 @@ class MiaopuViewModel(
             ?: MainSection.HOME,
     )
         private set
-    var scheduleState: LoadState<Schedule> by mutableStateOf(LoadState.Loading)
-        private set
+    private var scheduleStates: Map<Esport, LoadState<Schedule>> by mutableStateOf(emptyMap())
     var ratingState: LoadState<RatingDetail> by mutableStateOf(LoadState.Loading)
         private set
     var stageRatingState: LoadState<StageRatingDetail> by mutableStateOf(LoadState.Loading)
@@ -109,7 +109,7 @@ class MiaopuViewModel(
     val currentVersion: String get() = BuildConfig.VERSION_NAME
     val repositoryUrl: String get() = GitHubReleaseAdapter.REPOSITORY_URL
 
-    private var scheduleJob: Job? = null
+    private val scheduleJobs = mutableMapOf<Esport, Job>()
     private var ratingJob: Job? = null
     private var stageRatingJob: Job? = null
     private var commentJob: Job? = null
@@ -117,7 +117,7 @@ class MiaopuViewModel(
     private var publishCommentJob: Job? = null
 
     init {
-        loadSchedule()
+        loadSubscribedSchedules()
     }
 
     internal fun attachNavigator(nextNavigator: MiaopuNavigator) {
@@ -151,17 +151,13 @@ class MiaopuViewModel(
         if (selectedEsport == esport) return
         selectedEsport = esport
         subscriptionStore.saveSelected(esport)
-        schedules[esport]?.let {
-            scheduleState = LoadState.Ready(it)
-        } ?: loadSchedule()
+        if (scheduleStateFor(esport) !is LoadState.Ready) loadSchedule(esport = esport)
     }
 
     internal fun scheduleStateFor(esport: Esport): LoadState<Schedule> =
-        if (esport == selectedEsport) {
-            scheduleState
-        } else {
-            schedules[esport]?.let { LoadState.Ready(it) } ?: LoadState.Loading
-        }
+        scheduleStates[esport]
+            ?: schedules[esport]?.let { LoadState.Ready(it) }
+            ?: LoadState.Loading
 
     fun openSubscriptions() {
         navigator?.push(AppScreen.Subscriptions)
@@ -176,14 +172,17 @@ class MiaopuViewModel(
         val nextIds = subscribedEsports.mapTo(mutableSetOf()) { it.businessId }
         if (esport in subscribedEsports) nextIds.remove(esport.businessId) else nextIds.add(esport.businessId)
         val next = EsportCatalog.all.filterTo(linkedSetOf()) { it.businessId in nextIds }
+        val removed = subscribedEsports - next
+        removed.forEach { removedEsport -> scheduleJobs.remove(removedEsport)?.cancel() }
         subscribedEsports = next
+        scheduleStates = scheduleStates.filterKeys { it in next }
         subscriptionStore.saveSubscriptions(next)
 
         if (selectedEsport !in next) {
             selectedEsport = next.first()
             subscriptionStore.saveSelected(selectedEsport)
-            loadSchedule()
         }
+        loadSubscribedSchedules()
     }
 
     fun selectMainSection(section: MainSection) {
@@ -193,7 +192,11 @@ class MiaopuViewModel(
 
     fun retry() {
         when (val current = screen) {
-            AppScreen.Schedule -> loadSchedule(force = true)
+            AppScreen.Schedule -> if (selectedMainSection == MainSection.HOME) {
+                refreshHomeSchedules()
+            } else {
+                loadSchedule(force = true)
+            }
             AppScreen.Subscriptions -> Unit
             is AppScreen.Ratings -> loadRatings(current.match.toModel())
             is AppScreen.Stage -> loadStageRating(current.match.toModel(), current.stage.toModel())
@@ -203,6 +206,8 @@ class MiaopuViewModel(
     }
 
     fun refreshSchedule() = loadSchedule(force = true)
+
+    fun refreshHomeSchedules() = loadSubscribedSchedules(force = true)
 
     fun checkForUpdates() {
         if (updateCheckState == UpdateCheckState.Checking) return
@@ -415,21 +420,31 @@ class MiaopuViewModel(
         message = null
     }
 
-    private fun loadSchedule(force: Boolean = false) {
-        val esport = selectedEsport
+    private fun loadSubscribedSchedules(force: Boolean = false) {
+        subscribedEsports.forEach { esport -> loadSchedule(esport = esport, force = force) }
+    }
+
+    private fun loadSchedule(esport: Esport = selectedEsport, force: Boolean = false) {
         if (!force) schedules[esport]?.let {
-            scheduleState = LoadState.Ready(it)
+            updateScheduleState(esport, LoadState.Ready(it))
             return
         }
-        scheduleJob?.cancel()
-        scheduleState = LoadState.Loading
-        scheduleJob = viewModelScope.launch {
+        if (!force && scheduleJobs[esport]?.isActive == true) return
+        scheduleJobs.remove(esport)?.cancel()
+        updateScheduleState(esport, LoadState.Loading)
+        val scheduleJob = viewModelScope.launch(start = CoroutineStart.LAZY) {
             val nextState = adapter.getSchedule(esport).toLoadState()
+            if (scheduleJobs[esport] !== coroutineContext[Job]) return@launch
             (nextState as? LoadState.Ready)?.value?.let { schedules[esport] = it }
-            if (selectedEsport == esport) {
-                scheduleState = nextState
-            }
+            updateScheduleState(esport, nextState)
+            scheduleJobs.remove(esport)
         }
+        scheduleJobs[esport] = scheduleJob
+        scheduleJob.start()
+    }
+
+    private fun updateScheduleState(esport: Esport, state: LoadState<Schedule>) {
+        scheduleStates = scheduleStates + (esport to state)
     }
 
     private fun loadRatings(match: MatchSummary, autoOpenSingleStage: Boolean = true) {
