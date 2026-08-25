@@ -82,6 +82,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     private val schedules = mutableMapOf<Esport, Schedule>()
     private val scheduleViewports = mutableMapOf<Esport, ScheduleViewportSnapshot>()
     private val stageViewports = mutableMapOf<String, StageViewportSnapshot>()
+    private val publishCommentGate = TargetRequestGate()
 
     internal val navigationBackStack get() = navigator.backStack
     val screen: AppScreen get() = navigator.currentScreen
@@ -124,6 +125,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     private var stageRatingJob: Job? = null
     private var commentJob: Job? = null
     private var moreCommentsJob: Job? = null
+    private var publishCommentJob: Job? = null
 
     init {
         loadSchedule()
@@ -231,6 +233,9 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun openComments(target: RatingTarget) {
+        publishCommentJob?.cancel()
+        publishCommentGate.invalidate()
+        isPublishingComment = false
         commentDraft = ""
         navigator.push(AppScreen.Comments(target))
         loadComments(target)
@@ -295,9 +300,13 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
         isPublishingComment = true
-        viewModelScope.launch {
+        val targetKey = target.key
+        val token = publishCommentGate.begin(targetKey)
+        publishCommentJob = viewModelScope.launch {
             try {
                 val result = adapter.publishComment(target, content)
+                if (!publishCommentGate.isCurrent(token)) return@launch
+                if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
                 if (result.status == AdapterStatus.SUCCESS) {
                     commentDraft = ""
                     message = "评论发布成功"
@@ -307,7 +316,10 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
                     message = result.error?.message ?: "评论发布失败"
                 }
             } finally {
-                isPublishingComment = false
+                if (publishCommentGate.complete(token)) {
+                    isPublishingComment = false
+                    publishCommentJob = null
+                }
             }
         }
     }
@@ -353,6 +365,9 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     fun goBack() {
         val current = screen
         if (current is AppScreen.Comments) {
+            publishCommentJob?.cancel()
+            publishCommentJob = null
+            publishCommentGate.invalidate()
             commentJob?.cancel()
             moreCommentsJob?.cancel()
             commentReplies.clear()
