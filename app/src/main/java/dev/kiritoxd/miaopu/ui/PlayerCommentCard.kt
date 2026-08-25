@@ -84,7 +84,13 @@ internal fun PlayerCommentCard(
                 style = MiuixTheme.textStyles.footnote2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
-            if (comment.replyCount > 0) {
+            if (
+                shouldShowReplyToggle(
+                    replyCount = comment.replyCount,
+                    hasPreview = comment.previewReplies.isNotEmpty(),
+                    expanded = expanded,
+                )
+            ) {
                 TextButton(
                     text = if (expanded) "收起回复" else "${comment.replyCount} 条回复",
                     onClick = onToggleReplies,
@@ -314,6 +320,12 @@ private fun ReplyRow(reply: HupuComment, rootCommentId: String) {
 
 private fun replyAuthorLabel(reply: HupuComment, rootCommentId: String): String =
     reply.nestedReplyTarget(rootCommentId)?.let { "${reply.author} 回复 $it" } ?: reply.author
+
+internal fun shouldShowReplyToggle(
+    replyCount: Int,
+    hasPreview: Boolean,
+    expanded: Boolean,
+): Boolean = expanded || replyCount > 1 || (replyCount == 1 && !hasPreview)
 
 @Composable
 private fun CommentAvatar(comment: HupuComment, sizeDp: Int) {
