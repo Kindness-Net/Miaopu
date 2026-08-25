@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -71,7 +72,6 @@ internal fun PlayerCommentCard(
             )
         } else {
             comment.previewReplies.firstOrNull()?.let { reply ->
-                Spacer(Modifier.height(10.dp))
                 PreviewReply(reply, rootCommentId = comment.id)
             }
         }
@@ -188,22 +188,19 @@ private fun ExpandedReplies(
     onLoadMore: () -> Unit,
 ) {
     Spacer(Modifier.height(10.dp))
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MiuixTheme.colorScheme.surfaceVariant)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    RepliesSurface {
         when (state) {
             null, LoadState.Loading -> {
-                fallback.firstOrNull()?.let { ReplyRow(it, rootCommentId) }
-                Text(
-                    text = "正在加载完整回复…",
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
+                val preview = fallback.firstOrNull()
+                if (preview != null) {
+                    ReplyRow(preview, rootCommentId)
+                } else {
+                    Text(
+                        text = "正在加载完整回复…",
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
             }
             is LoadState.Failed -> {
                 fallback.firstOrNull()?.let { ReplyRow(it, rootCommentId) }
@@ -259,31 +256,23 @@ private fun ExpandedReplies(
 
 @Composable
 private fun PreviewReply(reply: HupuComment, rootCommentId: String) {
-    Row(
+    Spacer(Modifier.height(10.dp))
+    RepliesSurface {
+        ReplyRow(reply, rootCommentId)
+    }
+}
+
+@Composable
+private fun RepliesSurface(content: @Composable ColumnScope.() -> Unit) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(MiuixTheme.colorScheme.surfaceVariant)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CommentAvatar(reply, 28)
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = replyAuthorLabel(reply, rootCommentId),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MiuixTheme.textStyles.footnote1,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = reply.content,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = MiuixTheme.textStyles.footnote1,
-            )
-        }
+        content()
     }
 }
 

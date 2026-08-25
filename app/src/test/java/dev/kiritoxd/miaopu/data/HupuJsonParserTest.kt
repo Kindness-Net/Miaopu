@@ -108,6 +108,7 @@ class HupuJsonParserTest {
         assertEquals(5, page.comments.single().replyCount)
         val preview = page.comments.single().previewReplies.single()
         assertEquals("回复预览", preview.content)
+        assertEquals(6, preview.lightCount)
         assertEquals("c1", preview.parentCommentId)
         assertEquals("JR", preview.parentAuthor)
         assertEquals("98693416", preview.parentAuthorId)
@@ -249,7 +250,7 @@ class HupuJsonParserTest {
                     {"commentContentId":"audio-1","commentContent":"https://example.com/audio.aac","commentContentType":"AUDIO","durationInSec":8,"audioConvertToText":"语音文本"}
                   ],
                   "subCommentList":[{
-                    "commentId":"r1","commentUserName":"回复者","commentContent":"回复预览",
+                    "commentId":"r1","commentUserName":"回复者","commentContent":"回复预览","lightCount":6,
                     "parentCommentId":"c1","parentCommentUserId":98693416,"parentCommentUserName":"JR",
                     "parentCommentContent":"第一行<br/>第二行","parentCommentCanSee":true
                   }]
