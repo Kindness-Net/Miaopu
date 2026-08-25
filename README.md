@@ -56,6 +56,17 @@
 
 测试分发 APK 位于 `app/build/outputs/apk/release/app-release.apk`。当前 release 变体为方便覆盖安装使用调试证书签名，正式发布前必须替换为独立的生产签名。
 
+### 自动发版
+
+推送与 `app/build.gradle.kts` 中 `versionName` 相同的版本标签（例如 `1.0.2`）后，GitHub Actions 会安装 JDK 21、Android SDK 37 与 Build Tools 37.0.0，执行单元测试和 release APK 编译，然后上传 APK 与 SHA-256 校验文件到 GitHub Release。该流程只使用仓库自带的 `GITHUB_TOKEN`，无需额外配置 Secrets。
+
+发版前先更新 `versionCode` 和 `versionName`，提交后创建并推送标签：
+
+```bash
+git tag 1.0.2
+git push origin 1.0.2
+```
+
 ## 安全说明
 
 - 登录页只允许 HTTPS 的 `hupu.com` 与 `hoopchina.com.cn` 官方域名导航。
