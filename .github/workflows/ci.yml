@@ -20,6 +20,8 @@ jobs:
     name: Test and build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RELEASE_SIGNING_AVAILABLE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
 
     steps:
       - name: Check out source
@@ -55,11 +57,43 @@ jobs:
             "platforms;android-37.0" \
             "build-tools;37.0.0"
 
+      - name: Prepare release signing
+        if: env.RELEASE_SIGNING_AVAILABLE == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          signing_dir="$RUNNER_TEMP/miaopu-signing"
+          mkdir -p "$signing_dir"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/release.jks"
+          chmod 600 "$signing_dir/release.jks"
+          echo "MIAOPU_KEYSTORE_PATH=$signing_dir/release.jks" >> "$GITHUB_ENV"
+          echo "MIAOPU_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "MIAOPU_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "MIAOPU_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "MIAOPU_RELEASE_SIGNING_READY=true" >> "$GITHUB_ENV"
+
       - name: Run unit tests and build release APK
         run: |
           set -euo pipefail
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleRelease --no-daemon --stacktrace
+
+      - name: Verify release APK signature
+        if: env.MIAOPU_RELEASE_SIGNING_READY == 'true'
+        run: |
+          set -euo pipefail
+          "$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner" verify \
+            --verbose \
+            --print-certs \
+            app/build/outputs/apk/release/app-release.apk
 
       - name: Upload release APK
         uses: actions/upload-artifact@v7

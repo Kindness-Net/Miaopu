@@ -4,6 +4,21 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val releaseKeystorePath = providers.environmentVariable("MIAOPU_KEYSTORE_PATH").orNull
+val releaseKeystorePassword = providers.environmentVariable("MIAOPU_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("MIAOPU_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("MIAOPU_KEY_PASSWORD").orNull
+val releaseSigningValues = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+)
+val hasReleaseSigning = releaseSigningValues.all { !it.isNullOrBlank() }
+check(releaseSigningValues.none { !it.isNullOrBlank() } || hasReleaseSigning) {
+    "Release signing environment variables must be provided together."
+}
+
 android {
     namespace = "dev.kiritoxd.miaopu"
     buildToolsVersion = "37.0.0"
@@ -28,11 +43,22 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(checkNotNull(releaseKeystorePath))
+                storePassword = checkNotNull(releaseKeystorePassword)
+                keyAlias = checkNotNull(releaseKeyAlias)
+                keyPassword = checkNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
