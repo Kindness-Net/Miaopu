@@ -55,6 +55,7 @@ import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TabRow
@@ -133,7 +134,10 @@ private fun MainNavigationBar(
     selected: MainSection,
     onSelect: (MainSection) -> Unit,
 ) {
-    NavigationBar(showDivider = false) {
+    NavigationBar(
+        showDivider = false,
+        mode = NavigationBarDisplayMode.IconWithSelectedLabel,
+    ) {
         NavigationBarItem(
             selected = selected == MainSection.HOME,
             onClick = { onSelect(MainSection.HOME) },
