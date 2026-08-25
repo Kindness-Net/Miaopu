@@ -4,10 +4,8 @@ import top.yukonga.miuix.kmp.nav.core.NavBackStack
 import top.yukonga.miuix.kmp.nav.core.navBackStackOf
 
 internal class MiaopuNavigator(
-    initialScreen: AppScreen = AppScreen.Schedule,
+    val backStack: NavBackStack = navBackStackOf(AppScreen.Schedule),
 ) {
-    val backStack: NavBackStack = navBackStackOf(initialScreen)
-
     val currentScreen: AppScreen
         get() = backStack.last() as AppScreen
 
@@ -19,6 +17,17 @@ internal class MiaopuNavigator(
 
     fun replace(screen: AppScreen) {
         if (currentScreen != screen) backStack[backStack.lastIndex] = screen
+    }
+
+    fun contains(screen: AppScreen): Boolean =
+        backStack.any { (it as AppScreen).navigationContentKey == screen.navigationContentKey }
+
+    fun containsMatch(matchId: String): Boolean = backStack.any {
+        when (val screen = it as AppScreen) {
+            is AppScreen.Ratings -> screen.match.id == matchId
+            is AppScreen.Stage -> screen.match.id == matchId
+            else -> false
+        }
     }
 
     fun pop(): Boolean {

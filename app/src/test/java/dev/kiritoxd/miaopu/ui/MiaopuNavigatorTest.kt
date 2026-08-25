@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import top.yukonga.miuix.kmp.nav.core.navBackStackOf
 
 class MiaopuNavigatorTest {
     @Test
@@ -57,5 +58,14 @@ class MiaopuNavigatorTest {
 
         assertEquals("schedule", AppScreen.Schedule.navigationContentKey)
         assertEquals("web:true:https://hupu.com", web.navigationContentKey)
+    }
+
+    @Test
+    fun `navigator adopts a restored back stack`() {
+        val web = AppScreen.Web("登录", "https://hupu.com", login = true)
+        val navigator = MiaopuNavigator(navBackStackOf(AppScreen.Schedule, web))
+
+        assertEquals(web, navigator.currentScreen)
+        assertEquals(2, navigator.backStack.size)
     }
 }

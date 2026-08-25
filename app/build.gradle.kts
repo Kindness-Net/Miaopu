@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -59,6 +60,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation("androidx.navigationevent:navigationevent-compose:1.1.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4-rc01")
     implementation("top.yukonga.miuix.kmp:miuix-icons-android:0.9.4-rc01")
     implementation("top.yukonga.miuix.kmp:miuix-nav-android:0.9.4-rc01")

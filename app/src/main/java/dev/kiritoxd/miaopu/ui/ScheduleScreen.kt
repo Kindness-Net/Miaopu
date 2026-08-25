@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -167,8 +168,14 @@ private fun HomeContent(
         EmptyPane("暂无赛程数据", Modifier.padding(innerPadding))
         return
     }
-    val listState = remember(homeSchedule, nowMillis) {
+    val esport = viewModel.selectedEsport
+    val listState = rememberSaveable(esport.businessId, saver = LazyListState.Saver) {
         LazyListState(firstVisibleItemIndex = homeSchedule.homeInitialItemIndex(nowMillis))
+    }
+
+    LaunchedEffect(homeSchedule, listState) {
+        val lastIndex = (homeSchedule.days.sumOf { 1 + it.matches.size } - 1).coerceAtLeast(0)
+        if (listState.firstVisibleItemIndex > lastIndex) listState.scrollToItem(lastIndex)
     }
 
     Column(
@@ -238,20 +245,20 @@ private fun EventsContent(
     val totalListItems = remember(schedule) { schedule.days.sumOf { 1 + it.matches.size } }
     val restoredListIndex = savedViewport?.listIndex?.coerceIn(0, (totalListItems - 1).coerceAtLeast(0))
     val restoredDateIndex = savedViewport?.dateStripIndex?.coerceIn(0, schedule.days.lastIndex)
-    val listState = remember(esport, schedule) {
+    val listState = rememberSaveable(esport.businessId, "events-list", saver = LazyListState.Saver) {
         LazyListState(
             firstVisibleItemIndex = restoredListIndex ?: dayItemIndices.getOrElse(initialDayIndex) { 0 },
             firstVisibleItemScrollOffset = savedViewport?.listOffset?.coerceAtLeast(0) ?: 0,
         )
     }
-    val dateStripState = remember(esport, schedule) {
+    val dateStripState = rememberSaveable(esport.businessId, "events-dates", saver = LazyListState.Saver) {
         LazyListState(
             firstVisibleItemIndex = restoredDateIndex ?: initialDayIndex,
             firstVisibleItemScrollOffset = savedViewport?.dateStripOffset?.coerceAtLeast(0) ?: 0,
         )
     }
     val scope = rememberCoroutineScope()
-    var selectedDayKey by remember(esport, schedule) {
+    var selectedDayKey by rememberSaveable(esport.businessId, "events-day") {
         mutableStateOf(
             savedViewport?.selectedDayKey
                 ?.takeIf { saved -> schedule.days.any { it.date == saved } }
@@ -259,6 +266,17 @@ private fun EventsContent(
         )
     }
     val latestSelectedDayKey by rememberUpdatedState(selectedDayKey)
+
+    LaunchedEffect(esport, schedule, listState, dateStripState) {
+        val lastListIndex = (totalListItems - 1).coerceAtLeast(0)
+        if (listState.firstVisibleItemIndex > lastListIndex) listState.scrollToItem(lastListIndex)
+        if (dateStripState.firstVisibleItemIndex > schedule.days.lastIndex) {
+            dateStripState.scrollToItem(schedule.days.lastIndex)
+        }
+        if (schedule.days.none { it.date == selectedDayKey }) {
+            selectedDayKey = schedule.days.getOrNull(initialDayIndex)?.date.orEmpty()
+        }
+    }
 
     DisposableEffect(esport, schedule, listState, dateStripState) {
         onDispose {

@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.kiritoxd.miaopu.BuildConfig
 import dev.kiritoxd.miaopu.data.AdapterResult
@@ -31,7 +32,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
-import top.yukonga.miuix.kmp.nav.core.NavKey
 
 sealed interface LoadState<out T> {
     data object Loading : LoadState<Nothing>
@@ -47,50 +47,38 @@ sealed interface UpdateCheckState {
     data class Failed(val message: String) : UpdateCheckState
 }
 
-sealed interface AppScreen : NavKey {
-    data object Schedule : AppScreen
-    data object Subscriptions : AppScreen
-    data class Ratings(val match: MatchSummary) : AppScreen
-    data class Stage(
-        val match: MatchSummary,
-        val stage: RatingStage,
-        val stageNumber: Int,
-        val returnToStagePicker: Boolean,
-    ) : AppScreen
-    data class Comments(val target: RatingTarget) : AppScreen
-    data class Web(
-        val title: String,
-        val url: String,
-        val login: Boolean,
-    ) : AppScreen
-}
-
 enum class MainSection {
     HOME,
     EVENTS,
     PROFILE,
 }
 
-class MiaopuViewModel(application: Application) : AndroidViewModel(application) {
+class MiaopuViewModel(
+    application: Application,
+    private val savedStateHandle: SavedStateHandle,
+) : AndroidViewModel(application) {
     private val cookieSession = HupuCookieSession(application).also { it.restore() }
     private val adapter = HupuAdapter(cookieSession)
     private val releaseAdapter = GitHubReleaseAdapter()
     internal val commentReplies = CommentRepliesController(viewModelScope, adapter)
     private val subscriptionStore = EsportSubscriptionStore(application)
     private val initialSubscriptions = subscriptionStore.subscriptions()
-    private val navigator = MiaopuNavigator()
+    private var navigator: MiaopuNavigator? = null
     private val schedules = mutableMapOf<Esport, Schedule>()
     private val scheduleViewports = mutableMapOf<Esport, ScheduleViewportSnapshot>()
     private val stageViewports = mutableMapOf<String, StageViewportSnapshot>()
     private val publishCommentGate = TargetRequestGate()
 
-    internal val navigationBackStack get() = navigator.backStack
-    val screen: AppScreen get() = navigator.currentScreen
+    val screen: AppScreen get() = navigator?.currentScreen ?: AppScreen.Schedule
     var subscribedEsports: Set<Esport> by mutableStateOf(initialSubscriptions)
         private set
     var selectedEsport: Esport by mutableStateOf(subscriptionStore.selected(initialSubscriptions))
         private set
-    var selectedMainSection: MainSection by mutableStateOf(MainSection.HOME)
+    var selectedMainSection: MainSection by mutableStateOf(
+        savedStateHandle[SELECTED_MAIN_SECTION_KEY]
+            ?.let { saved -> MainSection.entries.firstOrNull { it.name == saved } }
+            ?: MainSection.HOME,
+    )
         private set
     var scheduleState: LoadState<Schedule> by mutableStateOf(LoadState.Loading)
         private set
@@ -108,7 +96,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
         private set
     var scoringTargetKey: String? by mutableStateOf(null)
         private set
-    var commentDraft: String by mutableStateOf("")
+    var commentDraft: String by mutableStateOf(savedStateHandle[COMMENT_DRAFT_KEY] ?: "")
         private set
     var isPublishingComment: Boolean by mutableStateOf(false)
         private set
@@ -131,6 +119,32 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
         loadSchedule()
     }
 
+    internal fun attachNavigator(nextNavigator: MiaopuNavigator) {
+        if (navigator === nextNavigator) return
+        navigator = nextNavigator
+        restoreNavigationState()
+    }
+
+    internal fun detachNavigator(detachedNavigator: MiaopuNavigator) {
+        if (navigator === detachedNavigator) navigator = null
+    }
+
+    private fun restoreNavigationState() {
+        val screens = navigator?.backStack?.map { it as AppScreen }.orEmpty()
+        val stageScreen = screens.filterIsInstance<AppScreen.Stage>().lastOrNull()
+        val ratingsMatch = screens.filterIsInstance<AppScreen.Ratings>().lastOrNull()?.match
+            ?: stageScreen?.match
+        if (ratingState is LoadState.Loading) {
+            ratingsMatch?.toModel()?.let { loadRatings(it, autoOpenSingleStage = false) }
+        }
+        if (stageRatingState is LoadState.Loading) {
+            stageScreen?.let { loadStageRating(it.match.toModel(), it.stage.toModel()) }
+        }
+        if (commentState is LoadState.Loading) {
+            (screens.lastOrNull() as? AppScreen.Comments)?.let { loadComments(it.target.toModel()) }
+        }
+    }
+
     fun selectEsport(esport: Esport) {
         if (esport !in subscribedEsports) return
         if (selectedEsport == esport) return
@@ -142,7 +156,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun openSubscriptions() {
-        navigator.push(AppScreen.Subscriptions)
+        navigator?.push(AppScreen.Subscriptions)
     }
 
     fun toggleSubscription(esport: Esport) {
@@ -166,15 +180,16 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
 
     fun selectMainSection(section: MainSection) {
         selectedMainSection = section
+        savedStateHandle[SELECTED_MAIN_SECTION_KEY] = section.name
     }
 
     fun retry() {
         when (val current = screen) {
             AppScreen.Schedule -> loadSchedule(force = true)
             AppScreen.Subscriptions -> Unit
-            is AppScreen.Ratings -> loadRatings(current.match)
-            is AppScreen.Stage -> loadStageRating(current.match, current.stage)
-            is AppScreen.Comments -> loadComments(current.target)
+            is AppScreen.Ratings -> loadRatings(current.match.toModel())
+            is AppScreen.Stage -> loadStageRating(current.match.toModel(), current.stage.toModel())
+            is AppScreen.Comments -> loadComments(current.target.toModel())
             is AppScreen.Web -> Unit
         }
     }
@@ -214,17 +229,17 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun openMatch(match: MatchSummary) {
-        val ratings = AppScreen.Ratings(match)
-        navigator.push(ratings)
+        val ratings = AppScreen.Ratings(match.toRoute())
+        navigator?.push(ratings)
         loadRatings(match)
     }
 
     fun openStage(match: MatchSummary, stage: RatingStage, stageNumber: Int) {
         stageViewports.remove(stageViewportKey(match, stage))
-        navigator.push(
+        navigator?.push(
             AppScreen.Stage(
-                match = match,
-                stage = stage,
+                match = match.toRoute(),
+                stage = stage.toRoute(),
                 stageNumber = stageNumber,
                 returnToStagePicker = true,
             ),
@@ -236,8 +251,8 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
         publishCommentJob?.cancel()
         publishCommentGate.invalidate()
         isPublishingComment = false
-        commentDraft = ""
-        navigator.push(AppScreen.Comments(target))
+        saveCommentDraft("")
+        navigator?.push(AppScreen.Comments(target.toRoute()))
         loadComments(target)
     }
 
@@ -285,7 +300,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun updateCommentDraft(value: String) {
-        commentDraft = value.take(500)
+        saveCommentDraft(value.take(500))
     }
 
     fun publishComment(target: RatingTarget) {
@@ -308,7 +323,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
                 if (!publishCommentGate.isCurrent(token)) return@launch
                 if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
                 if (result.status == AdapterStatus.SUCCESS) {
-                    commentDraft = ""
+                    saveCommentDraft("")
                     message = "评论发布成功"
                     loadComments(target)
                 } else {
@@ -334,7 +349,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun openLogin() {
-        navigator.push(
+        navigator?.push(
             AppScreen.Web(
                 title = "登录虎扑",
                 url = HupuUrls.loginUrl(),
@@ -351,7 +366,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
             return false
         }
         message = "虎扑登录成功"
-        navigator.pop()
+        navigator?.pop()
         return true
     }
 
@@ -374,11 +389,11 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
             isLoadingMoreComments = false
             commentPaginationError = null
             isPublishingComment = false
-            commentDraft = ""
+            saveCommentDraft("")
         }
         if (current is AppScreen.Ratings) ratingJob?.cancel()
         if (current is AppScreen.Stage) stageRatingJob?.cancel()
-        navigator.pop()
+        navigator?.pop()
     }
 
     fun dismissMessage() {
@@ -402,21 +417,25 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun loadRatings(match: MatchSummary) {
+    private fun loadRatings(match: MatchSummary, autoOpenSingleStage: Boolean = true) {
         ratingJob?.cancel()
         ratingState = LoadState.Loading
         ratingJob = viewModelScope.launch {
             val nextState = adapter.getRatings(match).toLoadState()
-            if ((screen as? AppScreen.Ratings)?.match?.id == match.id) {
+            if (navigator?.containsMatch(match.id) == true) {
                 ratingState = nextState
                 val detail = (nextState as? LoadState.Ready)?.value
-                if (detail?.stages?.size == 1) {
+                if (
+                    autoOpenSingleStage &&
+                    (screen as? AppScreen.Ratings)?.match?.id == match.id &&
+                    detail?.stages?.size == 1
+                ) {
                     val stage = detail.stages.single()
                     stageViewports.remove(stageViewportKey(match, stage))
-                    navigator.replace(
+                    navigator?.replace(
                         AppScreen.Stage(
-                            match = match,
-                            stage = stage,
+                            match = match.toRoute(),
+                            stage = stage.toRoute(),
                             stageNumber = 1,
                             returnToStagePicker = false,
                         ),
@@ -431,13 +450,20 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
         stageRatingJob?.cancel()
         stageRatingState = LoadState.Loading
         val key = "${stage.outBizType ?: match.outBizType}:${stage.outBizNo ?: match.outBizNo}"
+        val expectedScreen = AppScreen.Stage(
+            match = match.toRoute(),
+            stage = stage.toRoute(),
+            stageNumber = 0,
+            returnToStagePicker = false,
+        )
         stageRatingJob = viewModelScope.launch {
             val nextState = adapter.getStageRatingDetail(match, stage).toLoadState()
-            val current = screen as? AppScreen.Stage
-            val currentKey = current?.let {
+            val currentKey = (screen as? AppScreen.Stage)?.let {
                 "${it.stage.outBizType ?: it.match.outBizType}:${it.stage.outBizNo ?: it.match.outBizNo}"
             }
-            if (currentKey == key) stageRatingState = nextState
+            if (currentKey == key || navigator?.contains(expectedScreen) == true) {
+                stageRatingState = nextState
+            }
         }
     }
 
@@ -489,35 +515,35 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun updateUserScore(target: RatingTarget, score: Int) {
-        val detail = (ratingState as? LoadState.Ready)?.value ?: return
-        ratingState = LoadState.Ready(
-            detail.copy(
-                stages = detail.stages.map { stage ->
-                    stage.copy(
-                        targets = stage.targets.map {
-                            if (it.outBizType == target.outBizType && it.outBizNo == target.outBizNo) {
-                                it.copy(userScore = score)
-                            } else {
-                                it
-                            }
-                        },
-                    )
-                },
-            ),
-        )
-        val stageDetail = (stageRatingState as? LoadState.Ready)?.value ?: return
         fun update(candidate: RatingTarget): RatingTarget =
             if (candidate.outBizType == target.outBizType && candidate.outBizNo == target.outBizNo) {
                 candidate.copy(userScore = score)
             } else {
                 candidate
             }
-        stageRatingState = LoadState.Ready(
-            stageDetail.copy(
-                targets = stageDetail.targets.map(::update),
-                groups = stageDetail.groups.map { group -> group.copy(targets = group.targets.map(::update)) },
-            ),
-        )
+
+        (ratingState as? LoadState.Ready)?.value?.let { detail ->
+            ratingState = LoadState.Ready(
+                detail.copy(
+                    stages = detail.stages.map { stage ->
+                        stage.copy(targets = stage.targets.map(::update))
+                    },
+                ),
+            )
+        }
+        (stageRatingState as? LoadState.Ready)?.value?.let { stageDetail ->
+            stageRatingState = LoadState.Ready(
+                stageDetail.copy(
+                    targets = stageDetail.targets.map(::update),
+                    groups = stageDetail.groups.map { group -> group.copy(targets = group.targets.map(::update)) },
+                ),
+            )
+        }
+    }
+
+    private fun saveCommentDraft(value: String) {
+        commentDraft = value
+        savedStateHandle[COMMENT_DRAFT_KEY] = value
     }
 
     private fun <T> AdapterResult<T>.toLoadState(): LoadState<T> = data?.let(LoadState<T>::Ready)
@@ -531,4 +557,9 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun stageViewportKey(match: MatchSummary, stage: RatingStage): String =
         "${match.id}:${stage.outBizType ?: match.outBizType}:${stage.outBizNo ?: match.outBizNo}"
+
+    private companion object {
+        const val SELECTED_MAIN_SECTION_KEY = "selected_main_section"
+        const val COMMENT_DRAFT_KEY = "comment_draft"
+    }
 }

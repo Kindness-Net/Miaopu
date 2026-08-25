@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +20,7 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
+import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.nav.core.rememberNavSystemCornerRadius
 import top.yukonga.miuix.kmp.nav.transition.NavTransitions
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
@@ -27,6 +29,12 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 
 @Composable
 fun MiaopuApp(viewModel: MiaopuViewModel) {
+    val backStack = rememberNavBackStack<AppScreen>(AppScreen.Schedule)
+    val navigator = remember(backStack) { MiaopuNavigator(backStack) }
+    DisposableEffect(viewModel, navigator) {
+        viewModel.attachNavigator(navigator)
+        onDispose { viewModel.detachNavigator(navigator) }
+    }
     val themeController = remember { ThemeController(ColorSchemeMode.System) }
     MiuixTheme(controller = themeController) {
         Box(Modifier.fillMaxSize()) {
@@ -39,7 +47,7 @@ fun MiaopuApp(viewModel: MiaopuViewModel) {
                 )
             }
             NavDisplay(
-                backStack = viewModel.navigationBackStack,
+                backStack = backStack,
                 modifier = Modifier.fillMaxSize(),
                 onBack = viewModel::goBack,
                 transition = NavTransitions.MiuixDefault,
@@ -48,19 +56,19 @@ fun MiaopuApp(viewModel: MiaopuViewModel) {
                 entry<AppScreen.Schedule>(contentKey = { it.navigationContentKey }) { ScheduleScreen(viewModel) }
                 entry<AppScreen.Subscriptions>(contentKey = { it.navigationContentKey }) { SubscriptionScreen(viewModel) }
                 entry<AppScreen.Ratings>(contentKey = { it.navigationContentKey }) { screen ->
-                    RatingsScreen(viewModel, screen.match)
+                    RatingsScreen(viewModel, screen.match.toModel())
                 }
                 entry<AppScreen.Stage>(contentKey = { it.navigationContentKey }) { screen ->
                     MatchStageScreen(
                         viewModel = viewModel,
-                        match = screen.match,
-                        stage = screen.stage,
+                        match = screen.match.toModel(),
+                        stage = screen.stage.toModel(),
                         stageNumber = screen.stageNumber,
                         showStageNumber = screen.returnToStagePicker,
                     )
                 }
                 entry<AppScreen.Comments>(contentKey = { it.navigationContentKey }) { screen ->
-                    CommentsScreen(viewModel, screen.target)
+                    CommentsScreen(viewModel, screen.target.toModel())
                 }
                 entry<AppScreen.Web>(contentKey = { it.navigationContentKey }) { screen ->
                     HupuWebScreen(
