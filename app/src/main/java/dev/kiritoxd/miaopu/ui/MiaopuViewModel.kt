@@ -70,13 +70,13 @@ class MiaopuViewModel(
     private val publishCommentGate = TargetRequestGate()
     private val commentPaginationGate = TargetRequestGate()
 
-    val screen: AppScreen get() = navigator?.currentScreen ?: AppScreen.Schedule
+    internal val screen: AppScreen get() = navigator?.currentScreen ?: AppScreen.Schedule
     var subscribedEsports: Set<Esport> by mutableStateOf(initialSubscriptions)
         private set
     var selectedEsport: Esport by mutableStateOf(subscriptionStore.selected(initialSubscriptions))
         private set
-    var selectedMainSection: MainSection by mutableStateOf(
-        savedStateHandle[SELECTED_MAIN_SECTION_KEY]
+    var selectedMainSection: MainSection by mutableStateOf<MainSection>(
+        savedStateHandle.get<String>(SELECTED_MAIN_SECTION_KEY)
             ?.let { saved -> MainSection.entries.firstOrNull { it.name == saved } }
             ?: MainSection.HOME,
     )
