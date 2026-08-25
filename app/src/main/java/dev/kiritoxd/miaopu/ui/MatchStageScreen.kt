@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -123,10 +124,10 @@ private fun StageRatingContent(
             }
         }
     }
-    var selectedTabIndex by remember(detail) {
+    var selectedTabIndex by rememberSaveable {
         mutableIntStateOf(savedViewport?.selectedTabIndex ?: 0)
     }
-    var selectedOrderIndex by remember(detail) {
+    var selectedOrderIndex by rememberSaveable {
         mutableIntStateOf(savedViewport?.selectedOrderIndex ?: 0)
     }
     val currentTabIndex = selectedTabIndex.coerceIn(0, tabs.lastIndex.coerceAtLeast(0))
@@ -147,23 +148,19 @@ private fun StageRatingContent(
             )
         }
     }
-    val restoredViewport = remember(savedViewport, tabs.size, visibleTargets.size) {
-        savedViewport?.coerceFor(
-            tabCount = tabs.size,
-            orderCount = StageTargetOrder.entries.size,
-            itemCount = visibleTargets.size,
-        )
-    }
-    val listState = remember(detail) {
-        LazyListState(
-            firstVisibleItemIndex = restoredViewport?.listIndex ?: 0,
-            firstVisibleItemScrollOffset = restoredViewport?.listOffset ?: 0,
-        )
-    }
+    val restoredViewport = savedViewport?.coerceFor(
+        tabCount = tabs.size,
+        orderCount = StageTargetOrder.entries.size,
+        itemCount = visibleTargets.size,
+    )
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = restoredViewport?.listIndex ?: 0,
+        initialFirstVisibleItemScrollOffset = restoredViewport?.listOffset ?: 0,
+    )
     val latestTabIndex by rememberUpdatedState(currentTabIndex)
     val latestOrderIndex by rememberUpdatedState(currentOrderIndex)
 
-    DisposableEffect(detail, listState) {
+    DisposableEffect(listState) {
         onDispose {
             onSaveViewport(
                 StageViewportSnapshot(
