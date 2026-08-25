@@ -3,7 +3,9 @@ package dev.kiritoxd.miaopu.ui
 internal data class MainContentDestination(
     val section: MainSection,
     val esportIndex: Int?,
-)
+) {
+    val saveableKey: String = "${section.name}:${esportIndex ?: "profile"}"
+}
 
 internal fun mainContentDestinations(esportCount: Int): List<MainContentDestination> = buildList {
     repeat(esportCount.coerceAtLeast(0)) { esportIndex ->

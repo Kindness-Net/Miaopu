@@ -125,7 +125,7 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            key = { page -> destinations[page] },
+            key = { page -> destinations[page].saveableKey },
         ) { page ->
             val destination = destinations[page]
             MainSectionContent(

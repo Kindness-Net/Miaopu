@@ -28,6 +28,15 @@ class MainContentPagerTest {
     }
 
     @Test
+    fun `uses unique bundle saveable keys`() {
+        val destinations = mainContentDestinations(esportCount = 3)
+
+        assertEquals(destinations.size, destinations.map { it.saveableKey }.distinct().size)
+        assertEquals("HOME:0", destinations.first().saveableKey)
+        assertEquals("PROFILE:profile", destinations.last().saveableKey)
+    }
+
+    @Test
     fun `keeps profile available without esports`() {
         assertEquals(
             listOf(MainContentDestination(MainSection.PROFILE, esportIndex = null)),
