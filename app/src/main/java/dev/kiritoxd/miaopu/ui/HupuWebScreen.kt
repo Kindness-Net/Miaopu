@@ -7,7 +7,6 @@ import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -19,6 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.kiritoxd.miaopu.BuildConfig
 import dev.kiritoxd.miaopu.data.HupuCookieSession
 import dev.kiritoxd.miaopu.data.HupuUrls
@@ -45,6 +47,7 @@ fun HupuWebScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var loading by remember { mutableStateOf(true) }
     var loginHandled by remember { mutableStateOf(false) }
+    var canGoBack by remember { mutableStateOf(false) }
 
     fun finishLoginIfPossible() {
         if (!loginHandled && onLoginDetected()) loginHandled = true
@@ -55,7 +58,12 @@ fun HupuWebScreen(
         if (current?.canGoBack() == true) current.goBack() else onBack()
     }
 
-    BackHandler(onBack = ::navigateBack)
+    val webBackState = rememberNavigationEventState(NavigationEventInfo.None)
+    NavigationBackHandler(
+        state = webBackState,
+        isBackEnabled = canGoBack,
+        onBackCompleted = { webView?.goBack() },
+    )
 
     Scaffold(
         containerColor = MiuixTheme.colorScheme.background,
@@ -116,10 +124,12 @@ fun HupuWebScreen(
 
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                 loading = true
+                                canGoBack = view?.canGoBack() == true
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 loading = false
+                                canGoBack = view?.canGoBack() == true
                                 if (login && hasLoginCookie(url)) finishLoginIfPossible()
                             }
                         }
@@ -141,6 +151,7 @@ fun HupuWebScreen(
                 destroy()
             }
             webView = null
+            canGoBack = false
         }
     }
 }

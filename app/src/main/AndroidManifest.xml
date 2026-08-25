@@ -4,6 +4,7 @@
 
     <application
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
         android:label="喵扑"
         android:networkSecurityConfig="@xml/network_security_config"
@@ -21,4 +22,3 @@
         </activity>
     </application>
 </manifest>
-

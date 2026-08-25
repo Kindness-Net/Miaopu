@@ -31,6 +31,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import top.yukonga.miuix.kmp.nav.core.NavKey
 
 sealed interface LoadState<out T> {
     data object Loading : LoadState<Nothing>
@@ -46,7 +47,7 @@ sealed interface UpdateCheckState {
     data class Failed(val message: String) : UpdateCheckState
 }
 
-sealed interface AppScreen {
+sealed interface AppScreen : NavKey {
     data object Schedule : AppScreen
     data object Subscriptions : AppScreen
     data class Ratings(val match: MatchSummary) : AppScreen
@@ -77,12 +78,13 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     internal val commentReplies = CommentRepliesController(viewModelScope, adapter)
     private val subscriptionStore = EsportSubscriptionStore(application)
     private val initialSubscriptions = subscriptionStore.subscriptions()
+    private val navigator = MiaopuNavigator()
     private val schedules = mutableMapOf<Esport, Schedule>()
     private val scheduleViewports = mutableMapOf<Esport, ScheduleViewportSnapshot>()
     private val stageViewports = mutableMapOf<String, StageViewportSnapshot>()
 
-    var screen: AppScreen by mutableStateOf(AppScreen.Schedule)
-        private set
+    internal val navigationBackStack get() = navigator.backStack
+    val screen: AppScreen get() = navigator.currentScreen
     var subscribedEsports: Set<Esport> by mutableStateOf(initialSubscriptions)
         private set
     var selectedEsport: Esport by mutableStateOf(subscriptionStore.selected(initialSubscriptions))
@@ -117,8 +119,6 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     val currentVersion: String get() = BuildConfig.VERSION_NAME
     val repositoryUrl: String get() = GitHubReleaseAdapter.REPOSITORY_URL
 
-    private var webReturnScreen: AppScreen = AppScreen.Schedule
-    private var commentsParent: AppScreen = AppScreen.Schedule
     private var scheduleJob: Job? = null
     private var ratingJob: Job? = null
     private var stageRatingJob: Job? = null
@@ -140,7 +140,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun openSubscriptions() {
-        screen = AppScreen.Subscriptions
+        navigator.push(AppScreen.Subscriptions)
     }
 
     fun toggleSubscription(esport: Esport) {
@@ -213,25 +213,26 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
 
     fun openMatch(match: MatchSummary) {
         val ratings = AppScreen.Ratings(match)
-        screen = ratings
+        navigator.push(ratings)
         loadRatings(match)
     }
 
     fun openStage(match: MatchSummary, stage: RatingStage, stageNumber: Int) {
         stageViewports.remove(stageViewportKey(match, stage))
-        screen = AppScreen.Stage(
-            match = match,
-            stage = stage,
-            stageNumber = stageNumber,
-            returnToStagePicker = true,
+        navigator.push(
+            AppScreen.Stage(
+                match = match,
+                stage = stage,
+                stageNumber = stageNumber,
+                returnToStagePicker = true,
+            ),
         )
         loadStageRating(match, stage)
     }
 
     fun openComments(target: RatingTarget) {
         commentDraft = ""
-        commentsParent = screen
-        screen = AppScreen.Comments(target)
+        navigator.push(AppScreen.Comments(target))
         loadComments(target)
     }
 
@@ -321,11 +322,12 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun openLogin() {
-        webReturnScreen = screen
-        screen = AppScreen.Web(
-            title = "登录虎扑",
-            url = HupuUrls.loginUrl(),
-            login = true,
+        navigator.push(
+            AppScreen.Web(
+                title = "登录虎扑",
+                url = HupuUrls.loginUrl(),
+                login = true,
+            ),
         )
     }
 
@@ -337,7 +339,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
             return false
         }
         message = "虎扑登录成功"
-        screen = webReturnScreen
+        navigator.pop()
         return true
     }
 
@@ -361,18 +363,7 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
         }
         if (current is AppScreen.Ratings) ratingJob?.cancel()
         if (current is AppScreen.Stage) stageRatingJob?.cancel()
-        screen = when (current) {
-            AppScreen.Schedule -> AppScreen.Schedule
-            AppScreen.Subscriptions -> AppScreen.Schedule
-            is AppScreen.Ratings -> AppScreen.Schedule
-            is AppScreen.Stage -> if (current.returnToStagePicker) {
-                AppScreen.Ratings(current.match)
-            } else {
-                AppScreen.Schedule
-            }
-            is AppScreen.Comments -> commentsParent
-            is AppScreen.Web -> webReturnScreen
-        }
+        navigator.pop()
     }
 
     fun dismissMessage() {
@@ -407,11 +398,13 @@ class MiaopuViewModel(application: Application) : AndroidViewModel(application) 
                 if (detail?.stages?.size == 1) {
                     val stage = detail.stages.single()
                     stageViewports.remove(stageViewportKey(match, stage))
-                    screen = AppScreen.Stage(
-                        match = match,
-                        stage = stage,
-                        stageNumber = 1,
-                        returnToStagePicker = false,
+                    navigator.replace(
+                        AppScreen.Stage(
+                            match = match,
+                            stage = stage,
+                            stageNumber = 1,
+                            returnToStagePicker = false,
+                        ),
                     )
                     loadStageRating(match, stage)
                 }

@@ -1,6 +1,5 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -36,7 +35,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun RatingsScreen(viewModel: MiaopuViewModel, match: MatchSummary) {
-    BackHandler(onBack = viewModel::goBack)
     Scaffold(
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {

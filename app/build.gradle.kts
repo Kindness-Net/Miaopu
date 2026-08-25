@@ -58,8 +58,10 @@ android {
 dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
+    implementation("androidx.navigationevent:navigationevent-compose:1.1.2")
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4-rc01")
     implementation("top.yukonga.miuix.kmp:miuix-icons-android:0.9.4-rc01")
+    implementation("top.yukonga.miuix.kmp:miuix-nav-android:0.9.4-rc01")
     implementation("io.coil-kt.coil3:coil-compose:3.5.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.5.0")
 

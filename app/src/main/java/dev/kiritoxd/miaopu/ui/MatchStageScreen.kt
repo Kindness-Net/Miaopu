@@ -1,6 +1,5 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,7 +70,6 @@ fun MatchStageScreen(
     stageNumber: Int,
     showStageNumber: Boolean,
 ) {
-    BackHandler(onBack = viewModel::goBack)
     Scaffold(
         containerColor = MiuixTheme.colorScheme.surface,
         topBar = {

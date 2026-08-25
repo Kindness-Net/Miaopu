@@ -17,6 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.nav.core.NavDisplay
+import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
+import top.yukonga.miuix.kmp.nav.core.rememberNavSystemCornerRadius
+import top.yukonga.miuix.kmp.nav.transition.NavTransitions
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -26,25 +30,47 @@ fun MiaopuApp(viewModel: MiaopuViewModel) {
     val themeController = remember { ThemeController(ColorSchemeMode.System) }
     MiuixTheme(controller = themeController) {
         Box(Modifier.fillMaxSize()) {
-            when (val screen = viewModel.screen) {
-                AppScreen.Schedule -> ScheduleScreen(viewModel)
-                AppScreen.Subscriptions -> SubscriptionScreen(viewModel)
-                is AppScreen.Ratings -> RatingsScreen(viewModel, screen.match)
-                is AppScreen.Stage -> MatchStageScreen(
-                    viewModel = viewModel,
-                    match = screen.match,
-                    stage = screen.stage,
-                    stageNumber = screen.stageNumber,
-                    showStageNumber = screen.returnToStagePicker,
+            val cornerRadius = rememberNavSystemCornerRadius()
+            val backdropColor = MiuixTheme.colorScheme.surface
+            val navEffects = remember(cornerRadius, backdropColor) {
+                NavDisplayEffects(
+                    cornerClipRadius = cornerRadius,
+                    backdropColor = backdropColor,
                 )
-                is AppScreen.Comments -> CommentsScreen(viewModel, screen.target)
-                is AppScreen.Web -> HupuWebScreen(
-                    title = screen.title,
-                    url = screen.url,
-                    login = screen.login,
-                    onBack = viewModel::goBack,
-                    onLoginDetected = viewModel::finishLogin,
-                )
+            }
+            NavDisplay(
+                backStack = viewModel.navigationBackStack,
+                modifier = Modifier.fillMaxSize(),
+                onBack = viewModel::goBack,
+                transition = NavTransitions.MiuixDefault,
+                effects = navEffects,
+            ) {
+                entry<AppScreen.Schedule>(contentKey = { it.navigationContentKey }) { ScheduleScreen(viewModel) }
+                entry<AppScreen.Subscriptions>(contentKey = { it.navigationContentKey }) { SubscriptionScreen(viewModel) }
+                entry<AppScreen.Ratings>(contentKey = { it.navigationContentKey }) { screen ->
+                    RatingsScreen(viewModel, screen.match)
+                }
+                entry<AppScreen.Stage>(contentKey = { it.navigationContentKey }) { screen ->
+                    MatchStageScreen(
+                        viewModel = viewModel,
+                        match = screen.match,
+                        stage = screen.stage,
+                        stageNumber = screen.stageNumber,
+                        showStageNumber = screen.returnToStagePicker,
+                    )
+                }
+                entry<AppScreen.Comments>(contentKey = { it.navigationContentKey }) { screen ->
+                    CommentsScreen(viewModel, screen.target)
+                }
+                entry<AppScreen.Web>(contentKey = { it.navigationContentKey }) { screen ->
+                    HupuWebScreen(
+                        title = screen.title,
+                        url = screen.url,
+                        login = screen.login,
+                        onBack = viewModel::goBack,
+                        onLoginDetected = viewModel::finishLogin,
+                    )
+                }
             }
 
             AnimatedVisibility(

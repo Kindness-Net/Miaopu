@@ -1,6 +1,5 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Column
@@ -34,6 +33,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.kiritoxd.miaopu.data.EsportCatalog
 import dev.kiritoxd.miaopu.data.Schedule
 import dev.kiritoxd.miaopu.data.focusMatchId
@@ -66,9 +68,12 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 fun ScheduleScreen(viewModel: MiaopuViewModel) {
-    BackHandler(enabled = viewModel.selectedMainSection != MainSection.HOME) {
-        viewModel.selectMainSection(MainSection.HOME)
-    }
+    val backState = rememberNavigationEventState(NavigationEventInfo.None)
+    NavigationBackHandler(
+        state = backState,
+        isBackEnabled = viewModel.selectedMainSection != MainSection.HOME,
+        onBackCompleted = { viewModel.selectMainSection(MainSection.HOME) },
+    )
     Scaffold(
         containerColor = MiuixTheme.colorScheme.surface,
         bottomBar = {

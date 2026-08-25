@@ -1,6 +1,5 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +20,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.kiritoxd.miaopu.data.HupuComment
 import dev.kiritoxd.miaopu.data.RatingTarget
 import kotlinx.coroutines.flow.filter
@@ -39,8 +41,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
     var showComposer by rememberSaveable(target.outBizType, target.outBizNo) { mutableStateOf(false) }
-    BackHandler(enabled = !showComposer, onBack = viewModel::goBack)
-    BackHandler(enabled = showComposer) { showComposer = false }
+    val composerBackState = rememberNavigationEventState(NavigationEventInfo.None)
+    NavigationBackHandler(
+        state = composerBackState,
+        isBackEnabled = showComposer,
+        onBackCompleted = { showComposer = false },
+    )
     val listState = rememberLazyListState()
     val currentTarget = viewModel.latestRatingTarget(target)
     Scaffold(
