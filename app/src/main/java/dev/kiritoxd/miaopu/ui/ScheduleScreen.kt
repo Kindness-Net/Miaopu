@@ -1,12 +1,5 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Column
@@ -21,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
@@ -76,12 +71,28 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 fun ScheduleScreen(viewModel: MiaopuViewModel) {
+    val sections = MainSection.entries
+    val pagerState = rememberPagerState(
+        initialPage = viewModel.selectedMainSection.ordinal,
+        pageCount = { sections.size },
+    )
     val backState = rememberNavigationEventState(NavigationEventInfo.None)
     NavigationBackHandler(
         state = backState,
         isBackEnabled = viewModel.selectedMainSection != MainSection.HOME,
         onBackCompleted = { viewModel.selectMainSection(MainSection.HOME) },
     )
+    LaunchedEffect(viewModel.selectedMainSection, pagerState) {
+        val targetPage = viewModel.selectedMainSection.ordinal
+        if (pagerState.settledPage != targetPage) {
+            pagerState.animateScrollToPage(targetPage)
+        }
+    }
+    LaunchedEffect(pagerState, viewModel) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page -> viewModel.selectMainSection(sections[page]) }
+    }
     Scaffold(
         containerColor = MiuixTheme.colorScheme.surface,
         bottomBar = {
@@ -91,26 +102,14 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
             )
         },
     ) { innerPadding ->
-        AnimatedContent(
-            targetState = viewModel.selectedMainSection,
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            transitionSpec = {
-                val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                val enter = slideInHorizontally(
-                    animationSpec = tween(durationMillis = 300),
-                    initialOffsetX = { fullWidth -> direction * fullWidth / 5 },
-                ) + fadeIn(animationSpec = tween(durationMillis = 240))
-                val exit = slideOutHorizontally(
-                    animationSpec = tween(durationMillis = 300),
-                    targetOffsetX = { fullWidth -> -direction * fullWidth / 5 },
-                ) + fadeOut(animationSpec = tween(durationMillis = 180))
-                enter togetherWith exit
-            },
-            label = "main-section",
-        ) { section ->
+            key = { page -> sections[page] },
+        ) { page ->
             MainSectionContent(
                 viewModel = viewModel,
-                section = section,
+                section = sections[page],
                 innerPadding = innerPadding,
             )
         }
