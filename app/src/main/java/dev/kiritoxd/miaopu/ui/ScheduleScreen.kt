@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,6 +33,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.navigationevent.NavigationEventInfo
@@ -68,49 +70,31 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 fun ScheduleScreen(viewModel: MiaopuViewModel) {
+    val sections = MainSection.entries
     val subscriptions = EsportCatalog.all.filter { it in viewModel.subscribedEsports }
-    val destinations = remember(subscriptions) { mainContentDestinations(subscriptions.size) }
-    val selectedEsportIndex = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0)
-    val selectedDestinationIndex = mainContentDestinationIndex(
-        section = viewModel.selectedMainSection,
-        esportIndex = selectedEsportIndex,
-        esportCount = subscriptions.size,
-    )
     val pagerState = rememberPagerState(
-        initialPage = selectedDestinationIndex,
-        pageCount = { destinations.size },
+        initialPage = viewModel.selectedMainSection.ordinal,
+        pageCount = { sections.size },
     )
-    val visibleSection = destinations.getOrNull(pagerState.currentPage)?.section
-        ?: viewModel.selectedMainSection
+    val visibleSection = sections[pagerState.currentPage]
     val backState = rememberNavigationEventState(NavigationEventInfo.None)
     NavigationBackHandler(
         state = backState,
         isBackEnabled = viewModel.selectedMainSection != MainSection.HOME,
         onBackCompleted = { viewModel.selectMainSection(MainSection.HOME) },
     )
-    LaunchedEffect(viewModel.selectedMainSection, viewModel.selectedEsport, destinations, pagerState) {
-        val targetPage = mainContentDestinationIndex(
-            section = viewModel.selectedMainSection,
-            esportIndex = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0),
-            esportCount = subscriptions.size,
-        )
+    LaunchedEffect(viewModel.selectedMainSection, pagerState) {
+        val targetPage = viewModel.selectedMainSection.ordinal
         if (pagerState.settledPage != targetPage) {
             pagerState.animateScrollToPage(targetPage)
         }
     }
-    LaunchedEffect(pagerState, destinations, subscriptions, viewModel) {
+    LaunchedEffect(pagerState, viewModel) {
         snapshotFlow { pagerState.settledPage }
-            .map { page -> destinations.getOrNull(page) }
-            .filterNotNull()
             .distinctUntilChanged()
-            .collect { destination ->
-                destination.esportIndex
-                    ?.let(subscriptions::getOrNull)
-                    ?.takeIf { it != viewModel.selectedEsport }
-                    ?.let(viewModel::selectEsport)
-                if (destination.section != viewModel.selectedMainSection) {
-                    viewModel.selectMainSection(destination.section)
-                }
+            .collect { page ->
+                val section = sections[page]
+                if (section != viewModel.selectedMainSection) viewModel.selectMainSection(section)
             }
     }
     Scaffold(
@@ -125,13 +109,12 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            key = { page -> destinations[page].saveableKey },
+            key = { page -> sections[page].name },
         ) { page ->
-            val destination = destinations[page]
             MainSectionContent(
                 viewModel = viewModel,
-                section = destination.section,
-                esport = destination.esportIndex?.let(subscriptions::getOrNull),
+                section = sections[page],
+                subscriptions = subscriptions,
                 innerPadding = innerPadding,
             )
         }
@@ -142,52 +125,101 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
 private fun MainSectionContent(
     viewModel: MiaopuViewModel,
     section: MainSection,
-    esport: Esport?,
+    subscriptions: List<Esport>,
     innerPadding: PaddingValues,
 ) {
-    if (section == MainSection.PROFILE) {
-        ProfileContent(viewModel = viewModel, innerPadding = innerPadding)
-        return
-    }
-    val pageEsport = esport ?: return
+    when (section) {
+        MainSection.HOME,
+        MainSection.EVENTS,
+        -> EsportSectionContent(viewModel, section, subscriptions, innerPadding)
 
-    when (val state = viewModel.scheduleStateFor(pageEsport)) {
-        LoadState.Loading -> ScheduleLoadingContent(viewModel, innerPadding, section, pageEsport)
-        is LoadState.Failed -> ErrorPane(
-            message = state.message,
-            retryable = state.retryable,
-            onRetry = viewModel::retry,
-            modifier = Modifier.padding(innerPadding),
-        )
-        is LoadState.Ready -> when (section) {
-            MainSection.HOME -> HomeContent(viewModel, state.value, pageEsport, innerPadding)
-            MainSection.EVENTS -> EventsContent(viewModel, state.value, pageEsport, innerPadding)
-            MainSection.PROFILE -> Unit
-        }
+        MainSection.PROFILE -> ProfileContent(viewModel = viewModel, innerPadding = innerPadding)
     }
 }
 
 @Composable
-private fun ScheduleLoadingContent(
+private fun EsportSectionContent(
     viewModel: MiaopuViewModel,
-    innerPadding: PaddingValues,
     section: MainSection,
-    esport: Esport,
+    subscriptions: List<Esport>,
+    innerPadding: PaddingValues,
 ) {
+    if (subscriptions.isEmpty()) return
+
+    val selectedEsportIndex = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0)
+    val pagerState = rememberPagerState(
+        initialPage = selectedEsportIndex,
+        pageCount = { subscriptions.size },
+    )
+    val visibleEsport = subscriptions.getOrNull(pagerState.currentPage)
+        ?: subscriptions[selectedEsportIndex]
+
+    LaunchedEffect(viewModel.selectedEsport, subscriptions, pagerState) {
+        val targetPage = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0)
+        if (pagerState.settledPage != targetPage) pagerState.animateScrollToPage(targetPage)
+    }
+    LaunchedEffect(pagerState, subscriptions, viewModel) {
+        snapshotFlow { pagerState.settledPage }
+            .map(subscriptions::getOrNull)
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { esport ->
+                if (esport != viewModel.selectedEsport) viewModel.selectEsport(esport)
+            }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(top = innerPadding.calculateTopPadding()),
     ) {
         when (section) {
-            MainSection.HOME -> HomeHeader(viewModel, esport)
-            MainSection.EVENTS -> EventsHeader(viewModel, esport)
+            MainSection.HOME -> HomeHeader(viewModel, visibleEsport)
+            MainSection.EVENTS -> EventsHeader(viewModel, visibleEsport)
             MainSection.PROFILE -> Unit
         }
-        LoadingPane(
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            key = { page -> subscriptions[page].businessId },
+        ) { page ->
+            EsportPageContent(
+                viewModel = viewModel,
+                section = section,
+                esport = subscriptions[page],
+                innerPadding = innerPadding,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EsportPageContent(
+    viewModel: MiaopuViewModel,
+    section: MainSection,
+    esport: Esport,
+    innerPadding: PaddingValues,
+) {
+    val bottomPadding = innerPadding.calculateBottomPadding()
+
+    when (val state = viewModel.scheduleStateFor(esport)) {
+        LoadState.Loading -> LoadingPane(
             label = "正在同步${esport.title}赛程",
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxSize().padding(bottom = bottomPadding),
         )
+        is LoadState.Failed -> ErrorPane(
+            message = state.message,
+            retryable = state.retryable,
+            onRetry = viewModel::retry,
+            modifier = Modifier.fillMaxSize().padding(bottom = bottomPadding),
+        )
+        is LoadState.Ready -> when (section) {
+            MainSection.HOME -> HomeContent(viewModel, state.value, esport, bottomPadding)
+            MainSection.EVENTS -> EventsContent(viewModel, state.value, esport, bottomPadding)
+            MainSection.PROFILE -> Unit
+        }
     }
 }
 
@@ -223,13 +255,13 @@ private fun HomeContent(
     viewModel: MiaopuViewModel,
     schedule: Schedule,
     esport: Esport,
-    innerPadding: PaddingValues,
+    bottomPadding: Dp,
 ) {
     val nowMillis = remember(schedule) { System.currentTimeMillis() }
     val homeSchedule = remember(schedule, nowMillis) { schedule.homeWindowAround(nowMillis) }
 
     if (homeSchedule.days.isEmpty()) {
-        EmptyPane("暂无赛程数据", Modifier.padding(innerPadding))
+        EmptyPane("暂无赛程数据", Modifier.fillMaxSize().padding(bottom = bottomPadding))
         return
     }
     val listState = rememberSaveable(esport.businessId, saver = LazyListState.Saver) {
@@ -241,36 +273,26 @@ private fun HomeContent(
         if (listState.firstVisibleItemIndex > lastIndex) listState.scrollToItem(lastIndex)
     }
 
-    Column(
+    LazyColumn(
+        state = listState,
         modifier = Modifier
-            .fillMaxSize()
-            .padding(top = innerPadding.calculateTopPadding()),
+            .fillMaxWidth()
+            .fillMaxHeight(),
+        contentPadding = PaddingValues(bottom = bottomPadding + 16.dp),
     ) {
-        HomeHeader(viewModel, esport)
-
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(
-                bottom = innerPadding.calculateBottomPadding() + 16.dp,
-            ),
-        ) {
-            homeSchedule.days.forEach { day ->
-                item(key = "home-day-${day.date}", contentType = "day") {
-                    ScheduleDayBand(
-                        day = day,
-                        isFocused = day.matches.any { it.id == homeSchedule.anchorMatchId },
-                    )
-                }
-                itemsIndexed(
-                    items = day.matches,
-                    key = { index, match -> "home-${day.date}-${match.id}-$index" },
-                    contentType = { _, _ -> "schedule-match" },
-                ) { _, match ->
-                    HupuScheduleMatchCard(match = match, onClick = { viewModel.openMatch(match) })
-                }
+        homeSchedule.days.forEach { day ->
+            item(key = "home-day-${day.date}", contentType = "day") {
+                ScheduleDayBand(
+                    day = day,
+                    isFocused = day.matches.any { it.id == homeSchedule.anchorMatchId },
+                )
+            }
+            itemsIndexed(
+                items = day.matches,
+                key = { index, match -> "home-${day.date}-${match.id}-$index" },
+                contentType = { _, _ -> "schedule-match" },
+            ) { _, match ->
+                HupuScheduleMatchCard(match = match, onClick = { viewModel.openMatch(match) })
             }
         }
     }
@@ -281,10 +303,10 @@ private fun EventsContent(
     viewModel: MiaopuViewModel,
     schedule: Schedule,
     esport: Esport,
-    innerPadding: PaddingValues,
+    bottomPadding: Dp,
 ) {
     if (schedule.days.isEmpty()) {
-        EmptyPane("暂无赛程数据", Modifier.padding(innerPadding))
+        EmptyPane("暂无赛程数据", Modifier.fillMaxSize().padding(bottom = bottomPadding))
         return
     }
 
@@ -350,45 +372,36 @@ private fun EventsContent(
             .collect { dayIndex -> selectedDayKey = schedule.days[dayIndex].date }
     }
 
-    Column(
+    val listContentPadding = PaddingValues(bottom = bottomPadding + 16.dp)
+    Box(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(top = innerPadding.calculateTopPadding()),
+            .fillMaxWidth()
+            .fillMaxHeight(),
     ) {
-        EventsHeader(viewModel, esport)
-        val listContentPadding = PaddingValues(
-            bottom = innerPadding.calculateBottomPadding() + 16.dp,
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = listContentPadding,
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = listContentPadding,
-            ) {
-                schedule.days.forEachIndexed { dayIndex, day ->
-                    item(key = "day-${day.date}", contentType = "day") {
-                        ScheduleDayBand(day = day, isFocused = dayIndex == anchorDayIndex)
-                    }
-                    itemsIndexed(
-                        items = day.matches,
-                        key = { index, match -> "${day.date}-${match.id}-$index" },
-                        contentType = { _, _ -> "schedule-match" },
-                    ) { _, match ->
-                        HupuScheduleMatchCard(match = match, onClick = { viewModel.openMatch(match) })
-                    }
+            schedule.days.forEachIndexed { dayIndex, day ->
+                item(key = "day-${day.date}", contentType = "day") {
+                    ScheduleDayBand(day = day, isFocused = dayIndex == anchorDayIndex)
+                }
+                itemsIndexed(
+                    items = day.matches,
+                    key = { index, match -> "${day.date}-${match.id}-$index" },
+                    contentType = { _, _ -> "schedule-match" },
+                ) { _, match ->
+                    HupuScheduleMatchCard(match = match, onClick = { viewModel.openMatch(match) })
                 }
             }
-            ScheduleDateScrollBar(
-                state = listState,
-                date = selectedDayKey,
-                trackPadding = listContentPadding,
-                modifier = Modifier.fillMaxSize(),
-            )
         }
+        ScheduleDateScrollBar(
+            state = listState,
+            date = selectedDayKey,
+            trackPadding = listContentPadding,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 }
 
