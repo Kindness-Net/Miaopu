@@ -68,6 +68,7 @@ class MiaopuViewModel(
     private val scheduleViewports = mutableMapOf<Esport, ScheduleViewportSnapshot>()
     private val stageViewports = mutableMapOf<String, StageViewportSnapshot>()
     private val publishCommentGate = TargetRequestGate()
+    private val commentPaginationGate = TargetRequestGate()
 
     val screen: AppScreen get() = navigator?.currentScreen ?: AppScreen.Schedule
     var subscribedEsports: Set<Esport> by mutableStateOf(initialSubscriptions)
@@ -265,9 +266,11 @@ class MiaopuViewModel(
         moreCommentsJob?.cancel()
         commentPaginationError = null
         isLoadingMoreComments = true
+        val token = commentPaginationGate.begin(targetKey)
         moreCommentsJob = viewModelScope.launch {
             try {
                 val result = adapter.getComments(target, cursor)
+                if (!commentPaginationGate.isCurrent(token)) return@launch
                 if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
                 if (result.status == AdapterStatus.SUCCESS && result.data != null) {
                     val next = result.data
@@ -285,7 +288,10 @@ class MiaopuViewModel(
                     commentPaginationError = result.error?.message ?: "加载更多评论失败"
                 }
             } finally {
-                isLoadingMoreComments = false
+                if (commentPaginationGate.complete(token)) {
+                    isLoadingMoreComments = false
+                    moreCommentsJob = null
+                }
             }
         }
     }
@@ -385,6 +391,8 @@ class MiaopuViewModel(
             publishCommentGate.invalidate()
             commentJob?.cancel()
             moreCommentsJob?.cancel()
+            moreCommentsJob = null
+            commentPaginationGate.invalidate()
             commentReplies.clear()
             isLoadingMoreComments = false
             commentPaginationError = null
@@ -470,6 +478,8 @@ class MiaopuViewModel(
     private fun loadComments(target: RatingTarget) {
         commentJob?.cancel()
         moreCommentsJob?.cancel()
+        moreCommentsJob = null
+        commentPaginationGate.invalidate()
         commentReplies.clear()
         isLoadingMoreComments = false
         commentPaginationError = null

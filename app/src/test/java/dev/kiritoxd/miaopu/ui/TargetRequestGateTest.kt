@@ -26,4 +26,14 @@ class TargetRequestGateTest {
         assertTrue(gate.isCurrent(current))
         assertTrue(gate.complete(current))
     }
+
+    @Test
+    fun `a repeated request for the same target gets a new generation`() {
+        val gate = TargetRequestGate()
+        val old = gate.begin("player-a")
+        val current = gate.begin("player-a")
+
+        assertFalse(gate.complete(old))
+        assertTrue(gate.isCurrent(current))
+    }
 }
