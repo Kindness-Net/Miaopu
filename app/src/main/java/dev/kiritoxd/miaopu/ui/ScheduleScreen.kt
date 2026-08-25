@@ -1,7 +1,7 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.compose.foundation.gestures.animateScrollBy
-import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -22,13 +22,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -46,10 +46,7 @@ import dev.kiritoxd.miaopu.data.fullScheduleInitialDayIndex
 import dev.kiritoxd.miaopu.data.homeInitialItemIndex
 import dev.kiritoxd.miaopu.data.homeWindowAround
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -104,8 +101,34 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
     ) { innerPadding ->
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(viewModel) {
+                    val swipeThreshold = 64.dp.toPx()
+                    var dragDistance = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { dragDistance = 0f },
+                        onDragCancel = { dragDistance = 0f },
+                        onDragEnd = {
+                            when {
+                                dragDistance <= -swipeThreshold -> {
+                                    viewModel.applyMainContentSwipe(MainContentSwipeDirection.NEXT)
+                                }
+
+                                dragDistance >= swipeThreshold -> {
+                                    viewModel.applyMainContentSwipe(MainContentSwipeDirection.PREVIOUS)
+                                }
+                            }
+                            dragDistance = 0f
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            dragDistance += dragAmount
+                            change.consume()
+                        },
+                    )
+                },
             key = { page -> sections[page] },
+            userScrollEnabled = false,
         ) { page ->
             MainSectionContent(
                 viewModel = viewModel,
@@ -113,6 +136,23 @@ fun ScheduleScreen(viewModel: MiaopuViewModel) {
                 innerPadding = innerPadding,
             )
         }
+    }
+}
+
+private fun MiaopuViewModel.applyMainContentSwipe(direction: MainContentSwipeDirection) {
+    val subscriptions = EsportCatalog.all.filter { it in subscribedEsports }
+    val currentEsportIndex = subscriptions.indexOf(selectedEsport).coerceAtLeast(0)
+    val target = resolveMainContentSwipeTarget(
+        currentSection = selectedMainSection,
+        currentEsportIndex = currentEsportIndex,
+        esportCount = subscriptions.size,
+        direction = direction,
+    ) ?: return
+
+    if (target.section == selectedMainSection && target.esportIndex != currentEsportIndex) {
+        selectEsport(subscriptions[target.esportIndex])
+    } else if (target.section != selectedMainSection) {
+        selectMainSection(target.section)
     }
 }
 
@@ -282,20 +322,12 @@ private fun EventsContent(
     val savedViewport = remember(esport, schedule) { viewModel.scheduleViewport(esport) }
     val totalListItems = remember(schedule) { schedule.days.sumOf { 1 + it.matches.size } }
     val restoredListIndex = savedViewport?.listIndex?.coerceIn(0, (totalListItems - 1).coerceAtLeast(0))
-    val restoredDateIndex = savedViewport?.dateStripIndex?.coerceIn(0, schedule.days.lastIndex)
     val listState = rememberSaveable(esport.businessId, "events-list", saver = LazyListState.Saver) {
         LazyListState(
             firstVisibleItemIndex = restoredListIndex ?: dayItemIndices.getOrElse(initialDayIndex) { 0 },
             firstVisibleItemScrollOffset = savedViewport?.listOffset?.coerceAtLeast(0) ?: 0,
         )
     }
-    val dateStripState = rememberSaveable(esport.businessId, "events-dates", saver = LazyListState.Saver) {
-        LazyListState(
-            firstVisibleItemIndex = restoredDateIndex ?: initialDayIndex,
-            firstVisibleItemScrollOffset = savedViewport?.dateStripOffset?.coerceAtLeast(0) ?: 0,
-        )
-    }
-    val scope = rememberCoroutineScope()
     var selectedDayKey by rememberSaveable(esport.businessId, "events-day") {
         mutableStateOf(
             savedViewport?.selectedDayKey
@@ -305,34 +337,25 @@ private fun EventsContent(
     }
     val latestSelectedDayKey by rememberUpdatedState(selectedDayKey)
 
-    LaunchedEffect(esport, schedule, listState, dateStripState) {
+    LaunchedEffect(esport, schedule, listState) {
         val lastListIndex = (totalListItems - 1).coerceAtLeast(0)
         if (listState.firstVisibleItemIndex > lastListIndex) listState.scrollToItem(lastListIndex)
-        if (dateStripState.firstVisibleItemIndex > schedule.days.lastIndex) {
-            dateStripState.scrollToItem(schedule.days.lastIndex)
-        }
         if (schedule.days.none { it.date == selectedDayKey }) {
             selectedDayKey = schedule.days.getOrNull(initialDayIndex)?.date.orEmpty()
         }
     }
 
-    DisposableEffect(esport, schedule, listState, dateStripState) {
+    DisposableEffect(esport, schedule, listState) {
         onDispose {
             viewModel.saveScheduleViewport(
                 esport,
                 ScheduleViewportSnapshot(
                     listIndex = listState.firstVisibleItemIndex,
                     listOffset = listState.firstVisibleItemScrollOffset,
-                    dateStripIndex = dateStripState.firstVisibleItemIndex,
-                    dateStripOffset = dateStripState.firstVisibleItemScrollOffset,
                     selectedDayKey = latestSelectedDayKey,
                 ),
             )
         }
-    }
-
-    LaunchedEffect(esport, schedule, savedViewport) {
-        if (savedViewport == null) dateStripState.centerItem(initialDayIndex, animated = false)
     }
 
     LaunchedEffect(esport, schedule, listState) {
@@ -348,51 +371,40 @@ private fun EventsContent(
             .padding(top = innerPadding.calculateTopPadding()),
     ) {
         EventsHeader(viewModel)
-        ScheduleDateStrip(
-            days = schedule.days,
-            selectedDayKey = selectedDayKey,
-            state = dateStripState,
-            onDaySelected = { index ->
-                selectedDayKey = schedule.days[index].date
-                scope.launch { listState.animateScrollToItem(dayItemIndices[index]) }
-                scope.launch { dateStripState.centerItem(index, animated = true) }
-            },
+        val listContentPadding = PaddingValues(
+            bottom = innerPadding.calculateBottomPadding() + 16.dp,
         )
-
-        LazyColumn(
-            state = listState,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentPadding = PaddingValues(
-                bottom = innerPadding.calculateBottomPadding() + 16.dp,
-            ),
         ) {
-            schedule.days.forEachIndexed { dayIndex, day ->
-                item(key = "day-${day.date}", contentType = "day") {
-                    ScheduleDayBand(day = day, isFocused = dayIndex == anchorDayIndex)
-                }
-                itemsIndexed(
-                    items = day.matches,
-                    key = { index, match -> "${day.date}-${match.id}-$index" },
-                    contentType = { _, _ -> "schedule-match" },
-                ) { _, match ->
-                    HupuScheduleMatchCard(match = match, onClick = { viewModel.openMatch(match) })
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = listContentPadding,
+            ) {
+                schedule.days.forEachIndexed { dayIndex, day ->
+                    item(key = "day-${day.date}", contentType = "day") {
+                        ScheduleDayBand(day = day, isFocused = dayIndex == anchorDayIndex)
+                    }
+                    itemsIndexed(
+                        items = day.matches,
+                        key = { index, match -> "${day.date}-${match.id}-$index" },
+                        contentType = { _, _ -> "schedule-match" },
+                    ) { _, match ->
+                        HupuScheduleMatchCard(match = match, onClick = { viewModel.openMatch(match) })
+                    }
                 }
             }
+            ScheduleDateScrollBar(
+                state = listState,
+                date = selectedDayKey,
+                trackPadding = listContentPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
-}
-
-private suspend fun LazyListState.centerItem(index: Int, animated: Boolean) {
-    if (animated) animateScrollToItem(index) else scrollToItem(index)
-    val item = snapshotFlow {
-        layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-    }.filterNotNull().first()
-    val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
-    val itemCenter = item.offset + item.size / 2
-    val delta = (itemCenter - viewportCenter).toFloat()
-    if (animated) animateScrollBy(delta) else scrollBy(delta)
 }
 
 @Composable

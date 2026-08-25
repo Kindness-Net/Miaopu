@@ -1,31 +1,41 @@
 package dev.kiritoxd.miaopu.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,66 +45,106 @@ import dev.kiritoxd.miaopu.data.ScheduleDay
 import dev.kiritoxd.miaopu.data.Team
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.ScrollBarDefaults
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.VerticalScrollBar
+import top.yukonga.miuix.kmp.basic.rememberScrollBarAdapter
+import top.yukonga.miuix.kmp.interfaces.ExperimentalScrollBarApi
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import kotlin.math.abs
 
+@OptIn(ExperimentalScrollBarApi::class)
 @Composable
-internal fun ScheduleDateStrip(
-    days: List<ScheduleDay>,
-    selectedDayKey: String,
+internal fun ScheduleDateScrollBar(
     state: LazyListState,
-    onDaySelected: (Int) -> Unit,
+    date: String,
+    trackPadding: PaddingValues,
+    modifier: Modifier = Modifier,
 ) {
-    LazyRow(
-        state = state,
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        itemsIndexed(
-            items = days,
-            key = { index, day -> "date-${day.date}-$index" },
-        ) { index, day ->
-            val selected = day.date == selectedDayKey
+    val adapter = rememberScrollBarAdapter(state)
+    var isDragging by remember { mutableStateOf(false) }
+
+    BoxWithConstraints(modifier = modifier) {
+        val trackHeight = (
+            maxHeight - trackPadding.calculateTopPadding() - trackPadding.calculateBottomPadding()
+            ).coerceAtLeast(0.dp)
+        val visibleFraction = if (adapter.contentSize <= 0.0) {
+            1f
+        } else {
+            (adapter.viewportSize / adapter.contentSize).toFloat().coerceIn(0f, 1f)
+        }
+        val thumbHeight = (trackHeight * visibleFraction)
+            .coerceAtLeast(ScrollBarDefaults.ThumbMinLength)
+            .coerceAtMost(trackHeight)
+        val maxScrollOffset = (adapter.contentSize - adapter.viewportSize).coerceAtLeast(0.0)
+        val scrollFraction = if (maxScrollOffset == 0.0) {
+            0f
+        } else {
+            (adapter.scrollOffset / maxScrollOffset).toFloat().coerceIn(0f, 1f)
+        }
+        val bubbleHeight = 40.dp
+        val thumbOffset = trackPadding.calculateTopPadding() + (trackHeight - thumbHeight) * scrollFraction
+        val bubbleOffset = (thumbOffset + thumbHeight / 2 - bubbleHeight / 2).coerceIn(
+            0.dp,
+            (maxHeight - bubbleHeight).coerceAtLeast(0.dp),
+        )
+
+        VerticalScrollBar(
+            adapter = adapter,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .pointerInput(adapter) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startY = down.position.y
+                        var pointerPressed = true
+                        try {
+                            while (pointerPressed) {
+                                val event = awaitPointerEvent(PointerEventPass.Final)
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                if (!isDragging && change != null && abs(change.position.y - startY) >= viewConfiguration.touchSlop) {
+                                    isDragging = true
+                                }
+                                pointerPressed = change?.pressed == true
+                            }
+                        } finally {
+                            isDragging = false
+                        }
+                    }
+                }
+                .semantics {
+                    contentDescription = "赛程日期滚动条，当前 $date"
+                },
+            trackPadding = trackPadding,
+        )
+
+        AnimatedVisibility(
+            visible = isDragging && date.isNotBlank(),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = (-20).dp, y = bubbleOffset),
+        ) {
             Card(
                 modifier = Modifier
-                    .widthIn(min = 92.dp)
                     .semantics {
-                        role = Role.Tab
-                        this.selected = selected
-                        contentDescription = "${day.label.ifBlank { day.date }}，${day.matches.size} 场比赛"
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = "定位到 $date"
                     },
-                insideMargin = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                cornerRadius = 16.dp,
+                insideMargin = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                cornerRadius = 14.dp,
                 colors = CardDefaults.defaultColors(
-                    color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer,
-                    contentColor = if (selected) {
-                        MiuixTheme.colorScheme.onPrimary
-                    } else {
-                        MiuixTheme.colorScheme.onSurfaceContainer
-                    },
+                    color = MiuixTheme.colorScheme.surfaceContainer,
+                    contentColor = MiuixTheme.colorScheme.onSurfaceContainer,
                 ),
-                onClick = { onDaySelected(index) },
-                pressFeedbackType = PressFeedbackType.Sink,
-                showIndication = true,
             ) {
                 Text(
-                    text = day.label.ifBlank { day.date },
+                    text = date,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MiuixTheme.textStyles.footnote1,
                     fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "${day.matches.size} 场",
-                    style = MiuixTheme.textStyles.footnote2,
-                    color = if (selected) {
-                        MiuixTheme.colorScheme.onPrimary.copy(alpha = 0.72f)
-                    } else {
-                        MiuixTheme.colorScheme.onSurfaceVariantSummary
-                    },
                 )
             }
         }

@@ -34,6 +34,7 @@ android {
         targetSdk = 37
         versionCode = 28
         versionName = "1.0.3"
+        manifestPlaceholders["appLabel"] = "喵扑"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -55,6 +56,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            manifestPlaceholders["appLabel"] = "喵扑测试版"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
