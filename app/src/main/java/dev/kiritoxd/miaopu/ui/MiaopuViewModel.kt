@@ -156,6 +156,13 @@ class MiaopuViewModel(
         } ?: loadSchedule()
     }
 
+    internal fun scheduleStateFor(esport: Esport): LoadState<Schedule> =
+        if (esport == selectedEsport) {
+            scheduleState
+        } else {
+            schedules[esport]?.let { LoadState.Ready(it) } ?: LoadState.Loading
+        }
+
     fun openSubscriptions() {
         navigator?.push(AppScreen.Subscriptions)
     }

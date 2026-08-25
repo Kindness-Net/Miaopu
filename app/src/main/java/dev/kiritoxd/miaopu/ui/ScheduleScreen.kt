@@ -1,6 +1,5 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -39,6 +37,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
+import dev.kiritoxd.miaopu.data.Esport
 import dev.kiritoxd.miaopu.data.EsportCatalog
 import dev.kiritoxd.miaopu.data.Schedule
 import dev.kiritoxd.miaopu.data.focusMatchId
@@ -46,6 +45,7 @@ import dev.kiritoxd.miaopu.data.fullScheduleInitialDayIndex
 import dev.kiritoxd.miaopu.data.homeInitialItemIndex
 import dev.kiritoxd.miaopu.data.homeWindowAround
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -68,91 +68,73 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
 @Composable
 fun ScheduleScreen(viewModel: MiaopuViewModel) {
-    val sections = MainSection.entries
-    val pagerState = rememberPagerState(
-        initialPage = viewModel.selectedMainSection.ordinal,
-        pageCount = { sections.size },
+    val subscriptions = EsportCatalog.all.filter { it in viewModel.subscribedEsports }
+    val destinations = remember(subscriptions) { mainContentDestinations(subscriptions.size) }
+    val selectedEsportIndex = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0)
+    val selectedDestinationIndex = mainContentDestinationIndex(
+        section = viewModel.selectedMainSection,
+        esportIndex = selectedEsportIndex,
+        esportCount = subscriptions.size,
     )
+    val pagerState = rememberPagerState(
+        initialPage = selectedDestinationIndex,
+        pageCount = { destinations.size },
+    )
+    val visibleSection = destinations.getOrNull(pagerState.currentPage)?.section
+        ?: viewModel.selectedMainSection
     val backState = rememberNavigationEventState(NavigationEventInfo.None)
     NavigationBackHandler(
         state = backState,
         isBackEnabled = viewModel.selectedMainSection != MainSection.HOME,
         onBackCompleted = { viewModel.selectMainSection(MainSection.HOME) },
     )
-    LaunchedEffect(viewModel.selectedMainSection, pagerState) {
-        val targetPage = viewModel.selectedMainSection.ordinal
+    LaunchedEffect(viewModel.selectedMainSection, viewModel.selectedEsport, destinations, pagerState) {
+        val targetPage = mainContentDestinationIndex(
+            section = viewModel.selectedMainSection,
+            esportIndex = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0),
+            esportCount = subscriptions.size,
+        )
         if (pagerState.settledPage != targetPage) {
             pagerState.animateScrollToPage(targetPage)
         }
     }
-    LaunchedEffect(pagerState, viewModel) {
+    LaunchedEffect(pagerState, destinations, subscriptions, viewModel) {
         snapshotFlow { pagerState.settledPage }
+            .map { page -> destinations.getOrNull(page) }
+            .filterNotNull()
             .distinctUntilChanged()
-            .collect { page -> viewModel.selectMainSection(sections[page]) }
+            .collect { destination ->
+                destination.esportIndex
+                    ?.let(subscriptions::getOrNull)
+                    ?.takeIf { it != viewModel.selectedEsport }
+                    ?.let(viewModel::selectEsport)
+                if (destination.section != viewModel.selectedMainSection) {
+                    viewModel.selectMainSection(destination.section)
+                }
+            }
     }
     Scaffold(
         containerColor = MiuixTheme.colorScheme.surface,
         bottomBar = {
             MainNavigationBar(
-                selected = viewModel.selectedMainSection,
+                selected = visibleSection,
                 onSelect = viewModel::selectMainSection,
             )
         },
     ) { innerPadding ->
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(viewModel) {
-                    val swipeThreshold = 64.dp.toPx()
-                    var dragDistance = 0f
-                    detectHorizontalDragGestures(
-                        onDragStart = { dragDistance = 0f },
-                        onDragCancel = { dragDistance = 0f },
-                        onDragEnd = {
-                            when {
-                                dragDistance <= -swipeThreshold -> {
-                                    viewModel.applyMainContentSwipe(MainContentSwipeDirection.NEXT)
-                                }
-
-                                dragDistance >= swipeThreshold -> {
-                                    viewModel.applyMainContentSwipe(MainContentSwipeDirection.PREVIOUS)
-                                }
-                            }
-                            dragDistance = 0f
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            dragDistance += dragAmount
-                            change.consume()
-                        },
-                    )
-                },
-            key = { page -> sections[page] },
-            userScrollEnabled = false,
+            modifier = Modifier.fillMaxSize(),
+            key = { page -> destinations[page] },
         ) { page ->
+            val destination = destinations[page]
             MainSectionContent(
                 viewModel = viewModel,
-                section = sections[page],
+                section = destination.section,
+                esport = destination.esportIndex?.let(subscriptions::getOrNull),
                 innerPadding = innerPadding,
             )
         }
-    }
-}
-
-private fun MiaopuViewModel.applyMainContentSwipe(direction: MainContentSwipeDirection) {
-    val subscriptions = EsportCatalog.all.filter { it in subscribedEsports }
-    val currentEsportIndex = subscriptions.indexOf(selectedEsport).coerceAtLeast(0)
-    val target = resolveMainContentSwipeTarget(
-        currentSection = selectedMainSection,
-        currentEsportIndex = currentEsportIndex,
-        esportCount = subscriptions.size,
-        direction = direction,
-    ) ?: return
-
-    if (target.section == selectedMainSection && target.esportIndex != currentEsportIndex) {
-        selectEsport(subscriptions[target.esportIndex])
-    } else if (target.section != selectedMainSection) {
-        selectMainSection(target.section)
     }
 }
 
@@ -160,15 +142,17 @@ private fun MiaopuViewModel.applyMainContentSwipe(direction: MainContentSwipeDir
 private fun MainSectionContent(
     viewModel: MiaopuViewModel,
     section: MainSection,
+    esport: Esport?,
     innerPadding: PaddingValues,
 ) {
     if (section == MainSection.PROFILE) {
         ProfileContent(viewModel = viewModel, innerPadding = innerPadding)
         return
     }
+    val pageEsport = esport ?: return
 
-    when (val state = viewModel.scheduleState) {
-        LoadState.Loading -> ScheduleLoadingContent(viewModel, innerPadding, section)
+    when (val state = viewModel.scheduleStateFor(pageEsport)) {
+        LoadState.Loading -> ScheduleLoadingContent(viewModel, innerPadding, section, pageEsport)
         is LoadState.Failed -> ErrorPane(
             message = state.message,
             retryable = state.retryable,
@@ -176,8 +160,8 @@ private fun MainSectionContent(
             modifier = Modifier.padding(innerPadding),
         )
         is LoadState.Ready -> when (section) {
-            MainSection.HOME -> HomeContent(viewModel, state.value, innerPadding)
-            MainSection.EVENTS -> EventsContent(viewModel, state.value, innerPadding)
+            MainSection.HOME -> HomeContent(viewModel, state.value, pageEsport, innerPadding)
+            MainSection.EVENTS -> EventsContent(viewModel, state.value, pageEsport, innerPadding)
             MainSection.PROFILE -> Unit
         }
     }
@@ -188,6 +172,7 @@ private fun ScheduleLoadingContent(
     viewModel: MiaopuViewModel,
     innerPadding: PaddingValues,
     section: MainSection,
+    esport: Esport,
 ) {
     Column(
         modifier = Modifier
@@ -195,12 +180,12 @@ private fun ScheduleLoadingContent(
             .padding(top = innerPadding.calculateTopPadding()),
     ) {
         when (section) {
-            MainSection.HOME -> HomeHeader(viewModel)
-            MainSection.EVENTS -> EventsHeader(viewModel)
+            MainSection.HOME -> HomeHeader(viewModel, esport)
+            MainSection.EVENTS -> EventsHeader(viewModel, esport)
             MainSection.PROFILE -> Unit
         }
         LoadingPane(
-            label = "正在同步${viewModel.selectedEsport.title}赛程",
+            label = "正在同步${esport.title}赛程",
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
     }
@@ -237,6 +222,7 @@ private fun MainNavigationBar(
 private fun HomeContent(
     viewModel: MiaopuViewModel,
     schedule: Schedule,
+    esport: Esport,
     innerPadding: PaddingValues,
 ) {
     val nowMillis = remember(schedule) { System.currentTimeMillis() }
@@ -246,7 +232,6 @@ private fun HomeContent(
         EmptyPane("暂无赛程数据", Modifier.padding(innerPadding))
         return
     }
-    val esport = viewModel.selectedEsport
     val listState = rememberSaveable(esport.businessId, saver = LazyListState.Saver) {
         LazyListState(firstVisibleItemIndex = homeSchedule.homeInitialItemIndex(nowMillis))
     }
@@ -261,7 +246,7 @@ private fun HomeContent(
             .fillMaxSize()
             .padding(top = innerPadding.calculateTopPadding()),
     ) {
-        HomeHeader(viewModel)
+        HomeHeader(viewModel, esport)
 
         LazyColumn(
             state = listState,
@@ -295,6 +280,7 @@ private fun HomeContent(
 private fun EventsContent(
     viewModel: MiaopuViewModel,
     schedule: Schedule,
+    esport: Esport,
     innerPadding: PaddingValues,
 ) {
     if (schedule.days.isEmpty()) {
@@ -302,7 +288,6 @@ private fun EventsContent(
         return
     }
 
-    val esport = viewModel.selectedEsport
     val nowMillis = remember(schedule) { System.currentTimeMillis() }
     val focusMatchId = remember(schedule, nowMillis) { schedule.focusMatchId(nowMillis) }
     val anchorDayIndex = remember(schedule, focusMatchId) {
@@ -370,7 +355,7 @@ private fun EventsContent(
             .fillMaxSize()
             .padding(top = innerPadding.calculateTopPadding()),
     ) {
-        EventsHeader(viewModel)
+        EventsHeader(viewModel, esport)
         val listContentPadding = PaddingValues(
             bottom = innerPadding.calculateBottomPadding() + 16.dp,
         )
@@ -408,7 +393,7 @@ private fun EventsContent(
 }
 
 @Composable
-private fun HomeHeader(viewModel: MiaopuViewModel) {
+private fun HomeHeader(viewModel: MiaopuViewModel, esport: Esport) {
     PageHeading(
         eyebrow = "HUPU ESPORTS",
         title = "近期赛程",
@@ -421,11 +406,11 @@ private fun HomeHeader(viewModel: MiaopuViewModel) {
             }
         },
     )
-    EsportSelector(viewModel)
+    EsportSelector(viewModel, esport)
 }
 
 @Composable
-private fun EventsHeader(viewModel: MiaopuViewModel) {
+private fun EventsHeader(viewModel: MiaopuViewModel, esport: Esport) {
     PageHeading(
         eyebrow = "MATCH CENTER",
         title = "完整赛程",
@@ -438,15 +423,15 @@ private fun EventsHeader(viewModel: MiaopuViewModel) {
             }
         },
     )
-    EsportSelector(viewModel)
+    EsportSelector(viewModel, esport)
 }
 
 @Composable
-private fun EsportSelector(viewModel: MiaopuViewModel) {
+private fun EsportSelector(viewModel: MiaopuViewModel, selectedEsport: Esport) {
     val subscriptions = EsportCatalog.all.filter { it in viewModel.subscribedEsports }
     TabRow(
         tabs = subscriptions.map { it.shortTitle },
-        selectedTabIndex = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0),
+        selectedTabIndex = subscriptions.indexOf(selectedEsport).coerceAtLeast(0),
         onTabSelected = { viewModel.selectEsport(subscriptions[it]) },
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         colors = dataSourceTabRowColors(),

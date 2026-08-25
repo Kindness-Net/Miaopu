@@ -24,12 +24,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import dev.kiritoxd.miaopu.data.MatchSummary
 import dev.kiritoxd.miaopu.data.ScheduleDay
 import dev.kiritoxd.miaopu.data.Team
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.ScrollBarDefaults
@@ -52,7 +54,6 @@ import top.yukonga.miuix.kmp.basic.rememberScrollBarAdapter
 import top.yukonga.miuix.kmp.interfaces.ExperimentalScrollBarApi
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import kotlin.math.abs
 
 @OptIn(ExperimentalScrollBarApi::class)
 @Composable
@@ -63,6 +64,7 @@ internal fun ScheduleDateScrollBar(
     modifier: Modifier = Modifier,
 ) {
     val adapter = rememberScrollBarAdapter(state)
+    val scrollScope = rememberCoroutineScope()
     var isDragging by remember { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = modifier) {
@@ -94,18 +96,55 @@ internal fun ScheduleDateScrollBar(
             adapter = adapter,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
+                .fillMaxHeight(),
+            thumbWidth = if (isDragging) ScrollBarDefaults.DragThumbWidth else ScrollBarDefaults.ThumbWidth,
+            trackPadding = trackPadding,
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
                 .fillMaxHeight()
-                .pointerInput(adapter) {
+                .width(ScrollBarDefaults.TouchTargetWidth)
+                .pointerInput(adapter, trackPadding) {
+                    var scrollJob: Job? = null
+                    val topPaddingPx = trackPadding.calculateTopPadding().toPx()
+                    val bottomPaddingPx = trackPadding.calculateBottomPadding().toPx()
+                    val minThumbSizePx = ScrollBarDefaults.ThumbMinLength.toPx()
+
+                    fun scrollToPointer(pointerY: Float) {
+                        val trackSize = (size.height - topPaddingPx - bottomPaddingPx).coerceAtLeast(0f)
+                        val maxScrollOffset = (adapter.contentSize - adapter.viewportSize).coerceAtLeast(0.0)
+                        if (trackSize <= 0f || maxScrollOffset <= 0.0) return
+                        val visibleFraction = (adapter.viewportSize / adapter.contentSize)
+                            .toFloat()
+                            .coerceIn(0f, 1f)
+                        val thumbSize = (trackSize * visibleFraction)
+                            .coerceAtLeast(minThumbSizePx)
+                            .coerceAtMost(trackSize)
+                        val dragRange = (trackSize - thumbSize).coerceAtLeast(0f)
+                        val thumbPosition = (pointerY - topPaddingPx - thumbSize / 2)
+                            .coerceIn(0f, dragRange)
+                        val fraction = if (dragRange == 0f) 0f else thumbPosition / dragRange
+                        scrollJob?.cancel()
+                        scrollJob = scrollScope.launch {
+                            adapter.scrollTo(fraction * maxScrollOffset)
+                        }
+                    }
+
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val startY = down.position.y
-                        var pointerPressed = true
+                        isDragging = true
                         try {
+                            down.consume()
+                            scrollToPointer(down.position.y)
+                            var pointerPressed = true
                             while (pointerPressed) {
-                                val event = awaitPointerEvent(PointerEventPass.Final)
+                                val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id }
-                                if (!isDragging && change != null && abs(change.position.y - startY) >= viewConfiguration.touchSlop) {
-                                    isDragging = true
+                                if (change?.pressed == true) {
+                                    scrollToPointer(change.position.y)
+                                    change.consume()
                                 }
                                 pointerPressed = change?.pressed == true
                             }
@@ -117,7 +156,6 @@ internal fun ScheduleDateScrollBar(
                 .semantics {
                     contentDescription = "赛程日期滚动条，当前 $date"
                 },
-            trackPadding = trackPadding,
         )
 
         AnimatedVisibility(
