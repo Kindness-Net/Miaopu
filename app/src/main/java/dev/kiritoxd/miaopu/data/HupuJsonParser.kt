@@ -18,7 +18,7 @@ object HupuJsonParser {
                     for (matchIndex in 0 until matchesJson.length()) {
                         matchesJson.optJSONObject(matchIndex)
                             ?.let { parseMatch(it, esport) }
-                            ?.takeUnless(MatchSummary::isSchedulePlaceholder)
+                            ?.takeUnless { it.isSchedulePlaceholder() }
                             ?.let(::add)
                     }
                 }
