@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,7 +57,10 @@ internal fun PlayerCommentCard(
     ) {
         CommentAuthor(comment)
         Spacer(Modifier.height(12.dp))
-        Text(comment.content, style = MiuixTheme.textStyles.body1)
+        SelectableCommentText(
+            text = comment.content,
+            style = MiuixTheme.textStyles.body1,
+        )
         CommentImages(comment.imageUrls)
 
         if (expanded) {
@@ -105,30 +110,40 @@ internal fun PlayerCommentCard(
 
 @Composable
 private fun CommentAuthor(comment: HupuComment) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         CommentAvatar(comment, 40)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = comment.author,
-                    modifier = Modifier.weight(1f, fill = false),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.Bold,
-                    style = MiuixTheme.textStyles.body1,
-                )
-                comment.badge?.name?.takeIf(String::isNotBlank)?.let { badgeName ->
-                    Spacer(Modifier.width(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = badgeName,
+                        text = comment.author,
+                        modifier = Modifier.weight(1f, fill = false),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MiuixTheme.textStyles.footnote2,
-                        color = MiuixTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        style = MiuixTheme.textStyles.body1,
                     )
+                    comment.badge?.name?.takeIf(String::isNotBlank)?.let { badgeName ->
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = badgeName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.primary,
+                        )
+                    }
                 }
-                Spacer(Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = "👍 ${comment.lightCount}",
@@ -267,11 +282,17 @@ private fun RepliesSurface(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 private fun ReplyRow(reply: HupuComment, rootCommentId: String) {
-    Row(verticalAlignment = Alignment.Top) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
         CommentAvatar(reply, 30)
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     text = replyAuthorLabel(reply, rootCommentId),
                     modifier = Modifier.weight(1f),
@@ -280,6 +301,7 @@ private fun ReplyRow(reply: HupuComment, rootCommentId: String) {
                     style = MiuixTheme.textStyles.footnote1,
                     fontWeight = FontWeight.Bold,
                 )
+                Spacer(Modifier.width(8.dp))
                 Text(
                     text = "👍 ${reply.lightCount}",
                     style = MiuixTheme.textStyles.footnote2,
@@ -287,7 +309,10 @@ private fun ReplyRow(reply: HupuComment, rootCommentId: String) {
                 )
             }
             Spacer(Modifier.height(2.dp))
-            Text(reply.content, style = MiuixTheme.textStyles.footnote1)
+            SelectableCommentText(
+                text = reply.content,
+                style = MiuixTheme.textStyles.footnote1,
+            )
             CommentImages(reply.imageUrls)
             val metadata = listOfNotNull(reply.date.takeIf(String::isNotBlank), reply.location).joinToString(" · ")
             if (metadata.isNotBlank()) {
@@ -299,6 +324,19 @@ private fun ReplyRow(reply: HupuComment, rootCommentId: String) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SelectableCommentText(
+    text: String,
+    style: TextStyle,
+) {
+    SelectionContainer {
+        Text(
+            text = text,
+            style = style,
+        )
     }
 }
 
