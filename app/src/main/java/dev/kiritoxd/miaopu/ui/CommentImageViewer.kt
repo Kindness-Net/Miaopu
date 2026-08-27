@@ -7,8 +7,10 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -22,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,18 +36,35 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import dev.kiritoxd.miaopu.data.CommentImageSaveResult
+import dev.kiritoxd.miaopu.data.saveCommentImage
+import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
+
+private sealed interface ImageSaveDialogState {
+    data object Confirm : ImageSaveDialogState
+    data object Saving : ImageSaveDialogState
+    data class Saved(val location: String) : ImageSaveDialogState
+    data class Failed(val message: String) : ImageSaveDialogState
+}
 
 @Composable
 internal fun CommentImages(imageUrls: List<String>) {
@@ -90,6 +110,25 @@ internal fun CommentImageViewer(
         pageCount = { imageUrls.size },
     )
     var zoomedPage by remember { mutableStateOf<Int?>(null) }
+    var imageToSave by remember { mutableStateOf<String?>(null) }
+    var saveDialogState by remember { mutableStateOf<ImageSaveDialogState>(ImageSaveDialogState.Confirm) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    fun dismissSaveDialog() {
+        if (saveDialogState !is ImageSaveDialogState.Saving) imageToSave = null
+    }
+
+    fun startSaving() {
+        val imageUrl = imageToSave ?: return
+        saveDialogState = ImageSaveDialogState.Saving
+        scope.launch {
+            saveDialogState = when (val result = saveCommentImage(context, imageUrl)) {
+                is CommentImageSaveResult.Saved -> ImageSaveDialogState.Saved(result.location)
+                is CommentImageSaveResult.Failed -> ImageSaveDialogState.Failed(result.message)
+            }
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -115,6 +154,10 @@ internal fun CommentImageViewer(
                     imageUrl = imageUrls[page],
                     onZoomChanged = { zoomed ->
                         zoomedPage = if (zoomed) page else null
+                    },
+                    onSaveRequest = {
+                        imageToSave = imageUrls[page]
+                        saveDialogState = ImageSaveDialogState.Confirm
                     },
                 )
             }
@@ -143,13 +186,73 @@ internal fun CommentImageViewer(
                     style = MiuixTheme.textStyles.body1,
                     color = Color.White,
                 )
-                Text(
-                    text = if (imageUrls.size > 1) "左右滑动 · 双击缩放" else "双击缩放",
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = Color.White.copy(alpha = 0.72f),
-                )
+                if (imageUrls.size > 1) {
+                    Text(
+                        text = "左右滑动",
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = Color.White.copy(alpha = 0.72f),
+                    )
+                }
             }
+        }
+    }
+
+    WindowDialog(
+        show = imageToSave != null,
+        title = "保存图片",
+        summary = when (val state = saveDialogState) {
+            ImageSaveDialogState.Confirm -> "确认将当前原图保存到设备吗？"
+            ImageSaveDialogState.Saving -> "正在下载并保存原图…"
+            is ImageSaveDialogState.Saved -> "已保存到${state.location}"
+            is ImageSaveDialogState.Failed -> state.message
+        },
+        onDismissRequest = ::dismissSaveDialog,
+    ) {
+        when (saveDialogState) {
+            ImageSaveDialogState.Confirm -> ImageSaveActions(
+                confirmText = "保存",
+                onCancel = ::dismissSaveDialog,
+                onConfirm = ::startSaving,
+            )
+            ImageSaveDialogState.Saving -> Unit
+            is ImageSaveDialogState.Saved -> Button(
+                onClick = ::dismissSaveDialog,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColorsPrimary(),
+            ) {
+                Text("完成")
+            }
+            is ImageSaveDialogState.Failed -> ImageSaveActions(
+                confirmText = "重试",
+                onCancel = ::dismissSaveDialog,
+                onConfirm = ::startSaving,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImageSaveActions(
+    confirmText: String,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        TextButton(
+            text = "取消",
+            onClick = onCancel,
+            modifier = Modifier.weight(1f),
+        )
+        Button(
+            onClick = onConfirm,
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColorsPrimary(),
+        ) {
+            Text(confirmText)
         }
     }
 }
@@ -158,11 +261,13 @@ internal fun CommentImageViewer(
 private fun ZoomableCommentImage(
     imageUrl: String,
     onZoomChanged: (Boolean) -> Unit,
+    onSaveRequest: () -> Unit,
 ) {
     var scale by remember(imageUrl) { mutableStateOf(1f) }
     var offset by remember(imageUrl) { mutableStateOf(Offset.Zero) }
     var viewportSize by remember(imageUrl) { mutableStateOf(IntSize.Zero) }
     val latestScale by rememberUpdatedState(scale)
+    val latestSaveRequest by rememberUpdatedState(onSaveRequest)
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
         val nextScale = (scale * zoomChange).coerceIn(1f, 5f)
         offset = if (nextScale == 1f) {
@@ -183,6 +288,12 @@ private fun ZoomableCommentImage(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { viewportSize = it }
+            .semantics {
+                onLongClick(label = "保存图片") {
+                    latestSaveRequest()
+                    true
+                }
+            }
             .pointerInput(imageUrl) {
                 detectTapGestures(
                     onDoubleTap = {
@@ -190,6 +301,7 @@ private fun ZoomableCommentImage(
                         offset = Offset.Zero
                         onZoomChanged(scale > 1f)
                     },
+                    onLongPress = { latestSaveRequest() },
                 )
             }
             .transformable(
