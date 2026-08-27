@@ -1,6 +1,5 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,14 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -32,6 +27,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import dev.kiritoxd.miaopu.data.RatingTarget
 import top.yukonga.miuix.kmp.basic.Button
@@ -160,25 +156,23 @@ internal fun CommentInputBar(
     onPublish: () -> Unit,
     onScore: (RatingTarget, Int) -> Unit,
 ) {
-    var inputFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) {
+    LaunchedEffect(loggedIn) {
+        if (!loggedIn) return@LaunchedEffect
         focusRequester.requestFocus()
         keyboardController?.show()
     }
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        insideMargin = PaddingValues(10.dp),
-        cornerRadius = 20.dp,
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        insideMargin = PaddingValues(12.dp),
+        cornerRadius = 22.dp,
     ) {
-        AnimatedVisibility(visible = inputFocused && target.canScore) {
+        if (target.canScore) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -196,8 +190,8 @@ internal fun CommentInputBar(
                             selected = target.userScore == stars * 2
                         },
                         enabled = loggedIn && !scoring,
-                        minWidth = 34.dp,
-                        minHeight = 32.dp,
+                        minWidth = 40.dp,
+                        minHeight = 40.dp,
                         insideMargin = PaddingValues(0.dp),
                         colors = ButtonDefaults.buttonColors(),
                     ) {
@@ -211,28 +205,55 @@ internal fun CommentInputBar(
                     if (stars < 5) Spacer(Modifier.width(3.dp))
                 }
             }
+            Spacer(Modifier.height(10.dp))
         }
-        if (inputFocused && target.canScore) Spacer(Modifier.height(5.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+            insideMargin = DpSize(width = 14.dp, height = 12.dp),
+            cornerRadius = 16.dp,
+            label = if (loggedIn) "说说你的看法" else "登录后即可发表评论",
+            useLabelAsPlaceholder = true,
+            enabled = loggedIn && !publishing,
+            singleLine = false,
+            minLines = 3,
+            maxLines = 6,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (loggedIn) "${value.length}/500" else "请先在“我的”中登录",
                 modifier = Modifier
                     .weight(1f)
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { inputFocused = it.isFocused },
-                label = if (loggedIn) "用评论诠释观点" else "请先在“我的”中登录",
-                useLabelAsPlaceholder = true,
-                enabled = loggedIn && !publishing,
-                singleLine = true,
+                    .semantics {
+                        contentDescription = if (loggedIn) {
+                            "已输入 ${value.length} 字，最多 500 字"
+                        } else {
+                            "请先登录虎扑"
+                        }
+                    },
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = onPublish,
                 enabled = loggedIn && value.isNotBlank() && !publishing,
+                minWidth = 72.dp,
+                minHeight = 40.dp,
+                insideMargin = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                 colors = ButtonDefaults.buttonColorsPrimary(),
             ) {
-                Text(if (publishing) "发布中…" else "发布")
+                Text(
+                    text = if (publishing) "发送中" else "发送",
+                    style = MiuixTheme.textStyles.button,
+                )
             }
         }
     }

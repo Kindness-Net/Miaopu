@@ -1,6 +1,7 @@
 package dev.kiritoxd.miaopu.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -26,6 +27,17 @@ class SportsScheduleParserTest {
         val match = schedule.days.single().matches.single()
         assertEquals("common_match:fallback", match.id)
         assertEquals("common_match:fallback", match.uniqueKey)
+    }
+
+    @Test
+    fun discussionRoomPlaceholdersAreRemovedWithoutDroppingRealNonAgainstEvents() {
+        val schedule = HupuJsonParser.schedule(PLACEHOLDER_SCHEDULE_JSON, Esport.VALORANT)
+
+        val match = schedule.days.single().matches.single()
+        assertEquals("F1荷兰站正赛", match.introduction)
+        assertEquals("not_against", match.matchType)
+        assertTrue(match.teams.isEmpty())
+        assertNull(schedule.anchorMatchId)
     }
 
     private companion object {
@@ -80,6 +92,50 @@ class SportsScheduleParserTest {
                     "matchStartTimeStamp": "1787616000000",
                     "againstInfo": {"memberInfos": []}
                   }]
+                }]
+              }
+            }
+        """.trimIndent()
+
+        val PLACEHOLDER_SCHEDULE_JSON = """
+            {
+              "result": {
+                "anchorMatchId": "off-season",
+                "dayGameData": [{
+                  "dayTime": "2026-08-27",
+                  "dateBlock": "8月27日 周四",
+                  "matchData": [
+                    {
+                      "matchId": "off-season",
+                      "matchName": "休赛期",
+                      "matchIntroduction": "讨论室 休赛期",
+                      "matchType": "not_against",
+                      "matchStatus": "INPROGRESS",
+                      "matchStatusDesc": "进行中",
+                      "matchStartTimeStamp": "1787821757000",
+                      "againstInfo": {"memberInfos": [{}, {}]}
+                    },
+                    {
+                      "matchId": "rest-day",
+                      "matchName": "讨论",
+                      "matchIntroduction": "讨论室",
+                      "matchType": "not_against",
+                      "matchStatus": "COMPLETED",
+                      "matchStatusDesc": "已结束",
+                      "matchStartTimeStamp": "1787821757000",
+                      "againstInfo": {"memberInfos": []}
+                    },
+                    {
+                      "matchId": "f1-race",
+                      "matchName": "荷兰站正赛",
+                      "matchIntroduction": "F1荷兰站正赛",
+                      "matchType": "not_against",
+                      "matchStatus": "NOTSTARTED",
+                      "matchStatusDesc": "未开始",
+                      "matchStartTimeStamp": "1787821757000",
+                      "againstInfo": {"memberInfos": []}
+                    }
+                  ]
                 }]
               }
             }

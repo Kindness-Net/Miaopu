@@ -41,6 +41,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
     var showComposer by rememberSaveable(target.outBizType, target.outBizNo) { mutableStateOf(false) }
+    var publishAttemptActive by rememberSaveable(target.outBizType, target.outBizNo) {
+        mutableStateOf(false)
+    }
+    LaunchedEffect(
+        publishAttemptActive,
+        viewModel.isPublishingComment,
+        viewModel.commentDraft,
+    ) {
+        if (publishAttemptActive && !viewModel.isPublishingComment) {
+            if (viewModel.commentDraft.isEmpty()) showComposer = false
+            publishAttemptActive = false
+        }
+    }
     val composerBackState = rememberNavigationEventState(NavigationEventInfo.None)
     NavigationBackHandler(
         state = composerBackState,
@@ -72,8 +85,8 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
                     scoring = viewModel.scoringTargetKey != null,
                     onValueChange = viewModel::updateCommentDraft,
                     onPublish = {
+                        publishAttemptActive = true
                         viewModel.publishComment(target)
-                        showComposer = false
                     },
                     onScore = viewModel::requestScore,
                 )

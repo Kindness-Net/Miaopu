@@ -16,7 +16,10 @@ object HupuJsonParser {
                 val matchesJson = day.optJSONArray("matchData") ?: JSONArray()
                 val matches = buildList {
                     for (matchIndex in 0 until matchesJson.length()) {
-                        matchesJson.optJSONObject(matchIndex)?.let { add(parseMatch(it, esport)) }
+                        matchesJson.optJSONObject(matchIndex)
+                            ?.let { parseMatch(it, esport) }
+                            ?.takeUnless(MatchSummary::isSchedulePlaceholder)
+                            ?.let(::add)
                     }
                 }
                 if (matches.isNotEmpty()) {
@@ -30,7 +33,15 @@ object HupuJsonParser {
                 }
             }
         }
-        return Schedule(result.stringOrNull("anchorMatchId"), days)
+        val retainedMatchIds = days
+            .asSequence()
+            .flatMap { it.matches.asSequence() }
+            .flatMap { sequenceOf(it.id, it.uniqueKey) }
+            .toSet()
+        return Schedule(
+            anchorMatchId = result.stringOrNull("anchorMatchId")?.takeIf(retainedMatchIds::contains),
+            days = days,
+        )
     }
 
     fun ratingDetail(json: String): RatingDetail {
@@ -237,6 +248,15 @@ object HupuJsonParser {
             liveRoomLink = json.stringOrNull("liveRoomLink"),
             uniqueKey = uniqueKey,
         )
+    }
+
+    private fun MatchSummary.isSchedulePlaceholder(): Boolean {
+        val description = "$introduction $name"
+        val explicitlyOffSeason = description.contains("休赛期") || description.contains("休赛日")
+        val emptyDiscussionRoom = teams.isEmpty() &&
+            !matchType.equals("against", ignoreCase = true) &&
+            introduction.trimStart().startsWith("讨论室")
+        return explicitlyOffSeason || emptyDiscussionRoom
     }
 
     private fun collectTargets(
