@@ -534,6 +534,9 @@ private fun EsportSelector(viewModel: MiaopuViewModel, selectedEsport: Esport) {
         onTabSelected = { viewModel.selectEsport(subscriptions[it]) },
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         colors = dataSourceTabRowColors(),
+        minWidth = 80.dp,
+        maxWidth = 96.dp,
+        itemSpacing = 8.dp,
     )
 }
 
