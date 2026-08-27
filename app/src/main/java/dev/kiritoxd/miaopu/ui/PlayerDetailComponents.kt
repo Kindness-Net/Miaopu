@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import dev.kiritoxd.miaopu.data.RatingTarget
@@ -58,11 +59,28 @@ internal fun PlayerIdentityCard(target: RatingTarget, onCommentClick: () -> Unit
             )
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    text = target.name,
-                    style = MiuixTheme.textStyles.title1,
-                    fontWeight = FontWeight.Bold,
-                )
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(
+                        text = target.name,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MiuixTheme.textStyles.title1,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (target.scoreCount > 0) {
+                            "%.1f".format(target.scoreAverage)
+                        } else {
+                            "—"
+                        },
+                        style = MiuixTheme.textStyles.title2,
+                        color = MiuixTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
                 val tags = buildList {
                     target.description?.takeIf(String::isNotBlank)?.let(::add)
                     addAll(target.labels)
@@ -73,21 +91,19 @@ internal fun PlayerIdentityCard(target: RatingTarget, onCommentClick: () -> Unit
                     TagPill(tag)
                 }
                 Spacer(Modifier.height(7.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = if (target.scoreCount > 0) "%.1f".format(target.scoreAverage) else "—",
-                        style = MiuixTheme.textStyles.title3,
-                        color = MiuixTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.width(7.dp))
-                    Text(
-                        text = "${target.scoreCount} JRs评分 · ${target.commentCount} 条评论",
-                        modifier = Modifier.weight(1f),
-                        style = MiuixTheme.textStyles.footnote1,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    )
-                    Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "${target.scoreCount} JRs评分 · ${target.commentCount} 条评论",
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
                     TextButton(
                         text = "写评论",
                         onClick = onCommentClick,
