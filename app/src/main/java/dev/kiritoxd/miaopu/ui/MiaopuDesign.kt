@@ -118,11 +118,12 @@ internal fun SectionHeading(
 @Composable
 internal fun TagPill(
     text: String,
+    modifier: Modifier = Modifier,
     containerColor: Color = MiuixTheme.colorScheme.surfaceVariant,
     contentColor: Color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(50))
             .background(containerColor)
             .padding(horizontal = 9.dp, vertical = 4.dp),

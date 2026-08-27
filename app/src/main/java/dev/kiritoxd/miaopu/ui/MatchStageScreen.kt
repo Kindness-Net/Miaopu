@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -348,7 +349,10 @@ private fun OfficialRatingTargetCard(target: RatingTarget, onClick: () -> Unit) 
                 val label = target.labels.firstOrNull() ?: target.description
                 if (!label.isNullOrBlank()) {
                     Spacer(Modifier.height(5.dp))
-                    TagPill(label)
+                    TagPill(
+                        text = label,
+                        modifier = Modifier.offset(x = (-9).dp),
+                    )
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
