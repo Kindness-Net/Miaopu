@@ -121,24 +121,27 @@ internal fun MatchHero(match: MatchSummary) {
                     style = MiuixTheme.textStyles.title2,
                     fontWeight = FontWeight.Bold,
                 )
-                overallMatchScore(match)?.let { score ->
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = score,
-                        style = MiuixTheme.textStyles.title3,
-                        color = MiuixTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                }
                 Spacer(Modifier.height(5.dp))
-                Text(
-                    text = match.introduction.ifBlank { match.esport.title },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = match.introduction.ifBlank { match.esport.title },
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                    overallMatchScore(match)?.let { score ->
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = score,
+                            style = MiuixTheme.textStyles.title3,
+                            color = MiuixTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(7.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TagPill(match.status)
