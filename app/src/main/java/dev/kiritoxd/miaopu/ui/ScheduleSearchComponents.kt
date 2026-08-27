@@ -1,6 +1,5 @@
 package dev.kiritoxd.miaopu.ui
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,23 +22,21 @@ internal fun EventsScheduleSearchBar(
     onQueryChange: (String) -> Unit,
     onExpandedChange: (Boolean) -> Unit,
 ) {
-    AnimatedVisibility(visible = expanded) {
-        SearchBar(
-            modifier = Modifier.fillMaxWidth(),
-            inputField = {
-                InputField(
-                    query = query,
-                    onQueryChange = onQueryChange,
-                    onSearch = onQueryChange,
-                    expanded = expanded,
-                    onExpandedChange = onExpandedChange,
-                    label = "搜索赛事、轮次、战队或选手",
-                )
-            },
-            expanded = expanded,
-            onExpandedChange = onExpandedChange,
-        ) {}
-    }
+    SearchBar(
+        modifier = Modifier.fillMaxWidth(),
+        inputField = {
+            InputField(
+                query = query,
+                onQueryChange = onQueryChange,
+                onSearch = onQueryChange,
+                expanded = expanded,
+                onExpandedChange = onExpandedChange,
+                label = "搜索赛事、轮次、战队或选手",
+            )
+        },
+        expanded = expanded,
+        onExpandedChange = onExpandedChange,
+    ) {}
 }
 
 @Composable

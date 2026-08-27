@@ -516,13 +516,23 @@ private fun EventsHeader(
             }
         },
     )
-    EventsScheduleSearchBar(
-        expanded = searchExpanded,
-        query = searchQuery,
-        onQueryChange = onSearchQueryChange,
-        onExpandedChange = onSearchExpandedChange,
-    )
-    EsportSelector(viewModel, esport)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (searchExpanded) {
+            EventsScheduleSearchBar(
+                expanded = true,
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                onExpandedChange = onSearchExpandedChange,
+            )
+        } else {
+            EsportSelector(viewModel, esport)
+        }
+    }
 }
 
 @Composable
