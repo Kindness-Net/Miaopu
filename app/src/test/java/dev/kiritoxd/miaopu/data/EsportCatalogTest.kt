@@ -55,6 +55,7 @@ class EsportCatalogTest {
                 .filterNot { it.category == ScheduleCategory.ESPORTS }
                 .none(Esport::defaultSubscribed),
         )
+        assertEquals("乒乓球", Esport.TABLE_TENNIS.shortTitle)
     }
 
     @Test

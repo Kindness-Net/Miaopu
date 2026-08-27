@@ -89,7 +89,7 @@ enum class Esport(
     TABLE_TENNIS(
         "tabletennis",
         "乒乓球",
-        "WTT",
+        "乒乓球",
         false,
         ScheduleCategory.SPORTS,
         listOf(ScheduleSource.common("乒乓|WTT|世乒|乒超")),
