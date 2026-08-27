@@ -2,6 +2,7 @@ package dev.kiritoxd.miaopu.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,6 +46,7 @@ import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
     var showComposer by rememberSaveable(target.outBizType, target.outBizNo) { mutableStateOf(false) }
     var publishAttemptActive by rememberSaveable(target.outBizType, target.outBizNo) {
