@@ -91,19 +91,16 @@ internal fun PlayerIdentityCard(target: RatingTarget, onCommentClick: () -> Unit
                     TagPill(tag)
                 }
                 Spacer(Modifier.height(7.dp))
-                Text(
-                    text = "${target.scoreCount} JRs评分 · ${target.commentCount} 条评论",
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-                Spacer(Modifier.height(6.dp))
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${target.scoreCount} JRs评分 · ${target.commentCount} 条评论",
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MiuixTheme.textStyles.footnote2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                    Spacer(Modifier.width(6.dp))
                     TextButton(
                         text = "写评论",
                         onClick = onCommentClick,
