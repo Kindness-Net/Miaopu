@@ -47,6 +47,7 @@ import dev.kiritoxd.miaopu.data.focusMatchId
 import dev.kiritoxd.miaopu.data.focusInitialItemIndex
 import dev.kiritoxd.miaopu.data.homeWindowAround
 import dev.kiritoxd.miaopu.data.mergeSchedules
+import dev.kiritoxd.miaopu.data.searchSchedule
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -65,6 +66,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ContactsCircle
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Refresh
+import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.icon.extended.Tasks
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -188,6 +190,8 @@ private fun EventsSectionContent(
     )
     val visibleEsport = subscriptions.getOrNull(pagerState.currentPage)
         ?: subscriptions[selectedEsportIndex]
+    var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(viewModel.selectedEsport, subscriptions, pagerState) {
         val targetPage = subscriptions.indexOf(viewModel.selectedEsport).coerceAtLeast(0)
@@ -208,7 +212,17 @@ private fun EventsSectionContent(
             .fillMaxSize()
             .padding(top = innerPadding.calculateTopPadding()),
     ) {
-        EventsHeader(viewModel, visibleEsport)
+        EventsHeader(
+            viewModel = viewModel,
+            esport = visibleEsport,
+            searchExpanded = searchExpanded,
+            searchQuery = searchQuery,
+            onSearchQueryChange = { searchQuery = it },
+            onSearchExpandedChange = { expanded ->
+                searchExpanded = expanded
+                if (!expanded) searchQuery = ""
+            },
+        )
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -220,6 +234,7 @@ private fun EventsSectionContent(
                 viewModel = viewModel,
                 esport = subscriptions[page],
                 innerPadding = innerPadding,
+                searchQuery = searchQuery,
             )
         }
     }
@@ -230,6 +245,7 @@ private fun EventsPageContent(
     viewModel: MiaopuViewModel,
     esport: Esport,
     innerPadding: PaddingValues,
+    searchQuery: String,
 ) {
     val bottomPadding = innerPadding.calculateBottomPadding()
 
@@ -244,7 +260,19 @@ private fun EventsPageContent(
             onRetry = viewModel::retry,
             modifier = Modifier.fillMaxSize().padding(bottom = bottomPadding),
         )
-        is LoadState.Ready -> EventsContent(viewModel, state.value, esport, bottomPadding)
+        is LoadState.Ready -> if (searchQuery.isBlank()) {
+            EventsContent(viewModel, state.value, esport, bottomPadding)
+        } else {
+            val filteredSchedule = remember(state.value, searchQuery) {
+                state.value.searchSchedule(searchQuery)
+            }
+            EventsScheduleSearchResults(
+                schedule = filteredSchedule,
+                query = searchQuery,
+                bottomPadding = bottomPadding,
+                onMatchClick = viewModel::openMatch,
+            )
+        }
     }
 }
 
@@ -456,18 +484,43 @@ private fun HomeHeader(viewModel: MiaopuViewModel) {
 }
 
 @Composable
-private fun EventsHeader(viewModel: MiaopuViewModel, esport: Esport) {
+private fun EventsHeader(
+    viewModel: MiaopuViewModel,
+    esport: Esport,
+    searchExpanded: Boolean,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearchExpandedChange: (Boolean) -> Unit,
+) {
     PageHeading(
         eyebrow = "MATCH CENTER",
         title = "完整赛程",
         actions = {
-            IconButton(
-                onClick = viewModel::refreshSchedule,
-                backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
-            ) {
-                Icon(MiuixIcons.Refresh, contentDescription = "刷新赛程")
+            Row {
+                IconButton(
+                    onClick = { onSearchExpandedChange(!searchExpanded) },
+                    backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                ) {
+                    Icon(
+                        MiuixIcons.Search,
+                        contentDescription = if (searchExpanded) "关闭搜索" else "搜索赛程",
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = viewModel::refreshSchedule,
+                    backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                ) {
+                    Icon(MiuixIcons.Refresh, contentDescription = "刷新赛程")
+                }
             }
         },
+    )
+    EventsScheduleSearchBar(
+        expanded = searchExpanded,
+        query = searchQuery,
+        onQueryChange = onSearchQueryChange,
+        onExpandedChange = onSearchExpandedChange,
     )
     EsportSelector(viewModel, esport)
 }

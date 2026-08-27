@@ -37,19 +37,24 @@ class EsportCatalogTest {
                 Esport.BADMINTON,
                 Esport.FORMULA_ONE,
                 Esport.SNOOKER,
-                Esport.FOOTBALL,
                 Esport.VOLLEYBALL,
             ),
             EsportCatalog.all.filter { it.category == ScheduleCategory.SPORTS },
         )
+        assertEquals(
+            listOf(Esport.NBA, Esport.CBA, Esport.WNBA, Esport.CUBAL),
+            EsportCatalog.all.filter { it.category == ScheduleCategory.BASKETBALL },
+        )
+        assertEquals(
+            listOf(Esport.ENGLISH_PREMIER_LEAGUE, Esport.WORLD_CUP, Esport.FOOTBALL),
+            EsportCatalog.all.filter { it.category == ScheduleCategory.FOOTBALL },
+        )
         assertTrue(EsportCatalog.subscriptions(null).all { it.category == ScheduleCategory.ESPORTS })
-        assertFalse(Esport.TENNIS.defaultSubscribed)
-        assertFalse(Esport.TABLE_TENNIS.defaultSubscribed)
-        assertFalse(Esport.BADMINTON.defaultSubscribed)
-        assertFalse(Esport.FORMULA_ONE.defaultSubscribed)
-        assertFalse(Esport.SNOOKER.defaultSubscribed)
-        assertFalse(Esport.FOOTBALL.defaultSubscribed)
-        assertFalse(Esport.VOLLEYBALL.defaultSubscribed)
+        assertTrue(
+            EsportCatalog.all
+                .filterNot { it.category == ScheduleCategory.ESPORTS }
+                .none(Esport::defaultSubscribed),
+        )
     }
 
     @Test
@@ -68,6 +73,18 @@ class EsportCatalogTest {
         assertTrue(Esport.FORMULA_ONE.supplementalSources.single().includes("F1荷兰站正赛"))
         assertTrue(Esport.SNOOKER.supplementalSources.single().includes("斯诺克武汉公开赛8进4"))
         assertTrue(Esport.FOOTBALL.supplementalSources.single().includes("德国杯1/8决赛"))
+        assertFalse(Esport.FOOTBALL.supplementalSources.single().includes("英超联赛"))
+        assertFalse(Esport.FOOTBALL.supplementalSources.single().includes("足球世界杯决赛"))
         assertTrue(Esport.VOLLEYBALL.supplementalSources.single().includes("女排亚锦赛小组赛"))
+
+        assertTrue(Esport.NBA.supplementalSources.single().includes("NBA常规赛"))
+        assertFalse(Esport.NBA.supplementalSources.single().includes("WNBA常规赛"))
+        assertEquals("chinabasketball", Esport.CBA.supplementalSources.first().businessId)
+        assertTrue(Esport.CBA.supplementalSources.first().includes("任意中国篮球赛事"))
+        assertTrue(Esport.WNBA.supplementalSources.single().includes("WNBA常规赛"))
+        assertTrue(Esport.CUBAL.supplementalSources.single().includes("CUBAL总决赛"))
+        assertTrue(Esport.ENGLISH_PREMIER_LEAGUE.supplementalSources.single().includes("英超联赛"))
+        assertTrue(Esport.WORLD_CUP.supplementalSources.single().includes("世界杯决赛"))
+        assertFalse(Esport.WORLD_CUP.supplementalSources.single().includes("男篮世界杯小组赛"))
     }
 }

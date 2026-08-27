@@ -55,8 +55,8 @@ fun SubscriptionScreen(viewModel: MiaopuViewModel) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding() + 12.dp,
-                bottom = innerPadding.calculateBottomPadding() + 24.dp,
+                top = innerPadding.calculateTopPadding() + 6.dp,
+                bottom = innerPadding.calculateBottomPadding() + 16.dp,
             ),
         ) {
             item {
@@ -65,7 +65,7 @@ fun SubscriptionScreen(viewModel: MiaopuViewModel) {
             ScheduleCategory.entries.forEach { category ->
                 val projects = EsportCatalog.all.filter { it.category == category }
                 item(key = "category-${category.name}") {
-                    SectionHeading(category.title)
+                    SubscriptionSectionHeading(category.title)
                 }
                 items(
                     items = projects,
@@ -88,9 +88,9 @@ private fun SubscriptionSummary(count: Int) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        insideMargin = PaddingValues(20.dp),
-        cornerRadius = 24.dp,
+            .padding(horizontal = 14.dp, vertical = 3.dp),
+        insideMargin = PaddingValues(16.dp),
+        cornerRadius = 20.dp,
     ) {
         Text(
             text = "我的赛事",
@@ -98,19 +98,31 @@ private fun SubscriptionSummary(count: Int) {
             color = MiuixTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = "已订阅 $count 个项目",
-            style = MiuixTheme.textStyles.title1,
+            style = MiuixTheme.textStyles.title2,
             fontWeight = FontWeight.Bold,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             text = "首页只展示你的订阅；体育项目会合并专项赛程与综合热门中的对应比赛。",
-            style = MiuixTheme.textStyles.body2,
+            style = MiuixTheme.textStyles.footnote1,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         )
     }
+}
+
+@Composable
+private fun SubscriptionSectionHeading(title: String) {
+    Text(
+        text = title,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 18.dp, end = 16.dp, top = 14.dp, bottom = 6.dp),
+        style = MiuixTheme.textStyles.title4,
+        fontWeight = FontWeight.Bold,
+    )
 }
 
 @Composable
@@ -123,15 +135,15 @@ private fun SubscriptionItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp),
-        insideMargin = PaddingValues(16.dp),
-        cornerRadius = 20.dp,
+            .padding(horizontal = 14.dp, vertical = 3.dp),
+        insideMargin = PaddingValues(12.dp),
+        cornerRadius = 16.dp,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(15.dp))
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
                         if (subscribed) MiuixTheme.colorScheme.primary
                         else MiuixTheme.colorScheme.surfaceContainerHigh,
@@ -145,36 +157,35 @@ private fun SubscriptionItem(
                     fontWeight = FontWeight.Bold,
                 )
             }
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(esport.title, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(3.dp))
+                Text(esport.title, style = MiuixTheme.textStyles.title4, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = if (subscribed && !canUnsubscribe) {
                         "当前唯一订阅 · 至少保留一个项目"
-                    } else if (esport.category == ScheduleCategory.SPORTS) {
+                    } else if (esport.category != ScheduleCategory.ESPORTS) {
                         "虎扑赛程 · 综合热门补全 · 选手评分"
                     } else {
                         "虎扑赛程 · 选手评分 · 热评"
                     },
-                    style = MiuixTheme.textStyles.footnote1,
+                    style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Button(
                 onClick = onToggle,
+                modifier = Modifier.width(60.dp),
                 enabled = !subscribed || canUnsubscribe,
+                minWidth = 60.dp,
+                minHeight = 40.dp,
+                cornerRadius = 14.dp,
+                insideMargin = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 colors = if (subscribed) ButtonDefaults.buttonColors()
                 else ButtonDefaults.buttonColorsPrimary(),
             ) {
-                Text(
-                    when {
-                        !subscribed -> "订阅"
-                        canUnsubscribe -> "取消订阅"
-                        else -> "已订阅"
-                    },
-                )
+                Text(if (subscribed) "取消" else "订阅", style = MiuixTheme.textStyles.footnote1)
             }
         }
     }
