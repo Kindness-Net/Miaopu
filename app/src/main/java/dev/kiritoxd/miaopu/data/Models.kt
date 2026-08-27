@@ -5,12 +5,98 @@ enum class Esport(
     val title: String,
     val shortTitle: String,
     val defaultSubscribed: Boolean,
+    val category: ScheduleCategory = ScheduleCategory.ESPORTS,
+    val supplementalSources: List<ScheduleSource> = emptyList(),
+    val primaryScheduleBusinessId: String? = businessId,
 ) {
     LOL("lol", "英雄联盟", "LOL", true),
     KOG("kog", "王者荣耀", "KPL", true),
     CS2("cs2", "反恐精英 2", "CS2", true),
     VALORANT("val", "无畏契约", "VAL", true),
     PUBG("pubg", "绝地求生", "PUBG", true),
+    TENNIS(
+        "tennis",
+        "网球",
+        "网球",
+        false,
+        ScheduleCategory.SPORTS,
+        listOf(ScheduleSource.common("网球|ATP|WTA|美网|澳网|法网|温网")),
+    ),
+    TABLE_TENNIS(
+        "tabletennis",
+        "乒乓球",
+        "WTT",
+        false,
+        ScheduleCategory.SPORTS,
+        listOf(ScheduleSource.common("乒乓|WTT|世乒|乒超")),
+    ),
+    BADMINTON(
+        "badminton",
+        "羽毛球",
+        "羽球",
+        false,
+        ScheduleCategory.SPORTS,
+        listOf(ScheduleSource.common("羽毛球|BWF|苏迪曼|汤姆斯|尤伯|汤尤杯")),
+    ),
+    FORMULA_ONE(
+        businessId = "formula_one",
+        title = "一级方程式",
+        shortTitle = "F1",
+        defaultSubscribed = false,
+        category = ScheduleCategory.SPORTS,
+        supplementalSources = listOf(ScheduleSource.common("F1|一级方程式")),
+        primaryScheduleBusinessId = null,
+    ),
+    SNOOKER(
+        businessId = "snooker",
+        title = "斯诺克",
+        shortTitle = "斯诺克",
+        defaultSubscribed = false,
+        category = ScheduleCategory.SPORTS,
+        supplementalSources = listOf(ScheduleSource.common("斯诺克|台球")),
+        primaryScheduleBusinessId = null,
+    ),
+    FOOTBALL(
+        businessId = "football",
+        title = "足球",
+        shortTitle = "足球",
+        defaultSubscribed = false,
+        category = ScheduleCategory.SPORTS,
+        supplementalSources = listOf(
+            ScheduleSource.common("足球|德国杯|足总杯|欧冠|欧联|世俱杯|英超|西甲|意甲|法甲|中超"),
+        ),
+        primaryScheduleBusinessId = null,
+    ),
+    VOLLEYBALL(
+        businessId = "volleyball",
+        title = "排球",
+        shortTitle = "排球",
+        defaultSubscribed = false,
+        category = ScheduleCategory.SPORTS,
+        supplementalSources = listOf(ScheduleSource.common("排球|女排|男排|VNL")),
+        primaryScheduleBusinessId = null,
+    ),
+}
+
+enum class ScheduleCategory(val title: String) {
+    ESPORTS("电竞赛事"),
+    SPORTS("体育赛事"),
+}
+
+class ScheduleSource private constructor(
+    val businessId: String,
+    introductionPattern: String,
+) {
+    private val introductionRegex = Regex(introductionPattern, RegexOption.IGNORE_CASE)
+
+    fun includes(introduction: String): Boolean = introductionRegex.containsMatchIn(introduction)
+
+    companion object {
+        internal const val COMMON_HOT_SPORTS_BUSINESS_ID = "commonhotsports"
+
+        fun common(introductionPattern: String): ScheduleSource =
+            ScheduleSource(COMMON_HOT_SPORTS_BUSINESS_ID, introductionPattern)
+    }
 }
 
 object EsportCatalog {
@@ -53,6 +139,7 @@ data class MatchSummary(
     val matchType: String? = null,
     val statusCode: String? = null,
     val liveRoomLink: String? = null,
+    val uniqueKey: String = id,
 )
 
 data class FeaturedPlayer(

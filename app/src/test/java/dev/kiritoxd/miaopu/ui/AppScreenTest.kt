@@ -65,5 +65,6 @@ class AppScreenTest {
         matchType = null,
         statusCode = null,
         liveRoomLink = null,
+        uniqueKey = "common_match:match-1",
     )
 }

@@ -182,6 +182,47 @@ class ScheduleFocusTest {
     }
 
     @Test
+    fun `focus skips a cancelled future match`() {
+        val schedule = scheduleOf(
+            day(
+                "2026-08-24",
+                match("cancelled", "已取消", time(24, 17), statusCode = "CANCELLED"),
+                match("next", "未开始", time(24, 18), statusCode = "NOTSTARTED"),
+            ),
+        )
+
+        assertEquals("next", schedule.focusMatchId(time(24, 16)))
+    }
+
+    @Test
+    fun `focus recognizes hupu in progress status code`() {
+        val schedule = scheduleOf(
+            day(
+                "2026-08-24",
+                match("live", "比赛中", time(24, 15), statusCode = "INPROGRESS"),
+                match("next", "未开始", time(24, 18), statusCode = "NOTSTARTED"),
+            ),
+        )
+
+        assertEquals("live", schedule.focusMatchId(time(24, 16)))
+    }
+
+    @Test
+    fun `merge deduplicates the same hupu unique key across sources`() {
+        val primary = match("primary-id", "已结束", time(24, 10), uniqueKey = "common_match:42")
+        val supplement = match("supplement-id", "已结束", time(24, 10), uniqueKey = "common_match:42")
+
+        val merged = mergeSchedules(
+            listOf(
+                scheduleOf(day("2026-08-24", primary)),
+                scheduleOf(day("2026-08-24", supplement)),
+            ),
+        )
+
+        assertEquals(listOf("primary-id"), merged.days.single().matches.map { it.id })
+    }
+
+    @Test
     fun `home initial list item can point directly at focus without prior slots`() {
         val schedule = scheduleOf(
             day(
@@ -241,6 +282,8 @@ class ScheduleFocusTest {
         status: String,
         start: Long,
         esport: Esport = Esport.LOL,
+        statusCode: String? = null,
+        uniqueKey: String = id,
     ) = MatchSummary(
         id = id,
         esport = esport,
@@ -254,6 +297,8 @@ class ScheduleFocusTest {
         outBizType = "type",
         outBizNo = id,
         featuredPlayer = null,
+        statusCode = statusCode,
+        uniqueKey = uniqueKey,
     )
 
     private fun time(dayOfMonth: Int, hour: Int): Long = Calendar.getInstance().run {

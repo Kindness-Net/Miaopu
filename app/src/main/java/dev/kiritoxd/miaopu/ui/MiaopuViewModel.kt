@@ -195,7 +195,7 @@ class MiaopuViewModel(
             AppScreen.Schedule -> if (selectedMainSection == MainSection.HOME) {
                 refreshHomeSchedules()
             } else {
-                loadSchedule(force = true)
+                refreshSchedule()
             }
             AppScreen.Subscriptions -> Unit
             is AppScreen.Ratings -> loadRatings(current.match.toModel())
@@ -205,9 +205,15 @@ class MiaopuViewModel(
         }
     }
 
-    fun refreshSchedule() = loadSchedule(force = true)
+    fun refreshSchedule() {
+        adapter.invalidateSharedScheduleCache()
+        loadSchedule(force = true)
+    }
 
-    fun refreshHomeSchedules() = loadSubscribedSchedules(force = true)
+    fun refreshHomeSchedules() {
+        adapter.invalidateSharedScheduleCache()
+        loadSubscribedSchedules(force = true)
+    }
 
     fun checkForUpdates() {
         if (updateCheckState == UpdateCheckState.Checking) return

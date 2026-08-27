@@ -68,6 +68,7 @@ internal data class MatchRoute(
     val matchType: String?,
     val statusCode: String?,
     val liveRoomLink: String?,
+    val uniqueKey: String = "",
 )
 
 @Serializable
@@ -123,6 +124,7 @@ internal fun MatchSummary.toRoute(): MatchRoute = MatchRoute(
     matchType = matchType,
     statusCode = statusCode,
     liveRoomLink = liveRoomLink,
+    uniqueKey = uniqueKey,
 )
 
 internal fun MatchRoute.toModel(): MatchSummary = MatchSummary(
@@ -141,6 +143,7 @@ internal fun MatchRoute.toModel(): MatchSummary = MatchSummary(
     matchType = matchType,
     statusCode = statusCode,
     liveRoomLink = liveRoomLink,
+    uniqueKey = uniqueKey.ifBlank { id },
 )
 
 internal fun RatingStage.toRoute(): StageRoute = StageRoute(

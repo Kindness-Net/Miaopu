@@ -174,6 +174,12 @@ object HupuJsonParser {
 
     private fun parseMatch(json: JSONObject, esport: Esport): MatchSummary {
         val startMillis = json.stringOrNull("matchStartTimeStamp")?.toLongOrNull() ?: 0L
+        val matchId = json.stringOrNull("matchId").orEmpty()
+        val uniqueKey = json.stringOrNull("uniqueKey")
+            ?: json.stringOrNull("businessType")
+                ?.takeIf { matchId.isNotBlank() }
+                ?.let { businessType -> "$businessType:$matchId" }
+            ?: matchId
         val winnerId = json.optJSONObject("againstInfo")?.stringOrNull("winnerMemberId")
         val members = json.optJSONObject("againstInfo")?.optJSONArray("memberInfos") ?: JSONArray()
         val teams = buildList {
@@ -214,7 +220,7 @@ object HupuJsonParser {
             )
         }
         return MatchSummary(
-            id = json.stringOrNull("matchId").orEmpty(),
+            id = matchId.ifBlank { uniqueKey },
             esport = esport,
             name = json.stringOrNull("matchName") ?: "比赛",
             introduction = json.stringOrNull("matchIntroduction").orEmpty(),
@@ -229,6 +235,7 @@ object HupuJsonParser {
             matchType = json.stringOrNull("matchType"),
             statusCode = json.stringOrNull("matchStatus"),
             liveRoomLink = json.stringOrNull("liveRoomLink"),
+            uniqueKey = uniqueKey,
         )
     }
 

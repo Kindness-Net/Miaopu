@@ -554,7 +554,7 @@ private fun ProfileContent(viewModel: MiaopuViewModel, innerPadding: PaddingValu
                         Text("管理赛事项目", fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            "已订阅 ${viewModel.subscribedEsports.size} 个有赛程的电竞项目",
+                            "已订阅 ${viewModel.subscribedEsports.size} 个赛事项目",
                             style = MiuixTheme.textStyles.footnote1,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )

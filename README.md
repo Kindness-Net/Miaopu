@@ -1,10 +1,11 @@
 # 喵扑
 
-喵扑是一款使用 Kotlin、Jetpack Compose 与 Miuix 构建的 Android 电竞赛事评分客户端。当前收录虎扑有可用赛程的英雄联盟、王者荣耀、CS2、无畏契约和绝地求生，专注于赛程、选手评分和虎扑评论。
+喵扑是一款使用 Kotlin、Jetpack Compose 与 Miuix 构建的 Android 赛事评分客户端。当前收录虎扑有可用赛程的五项电竞赛事，以及网球、乒乓球、羽毛球、F1、斯诺克、足球和排球，专注于赛程、选手评分和虎扑评论。
 
 ## 已实现
 
-- 五个有赛程项目的实时赛程、比分、状态、队标和评分人数
+- 十二个有赛程项目的实时赛程、比分、状态、队标或选手头像和评分人数
+- 体育项目会合并专项赛程与 `commonhotsports` 综合热门赛程，并按虎扑 `uniqueKey` 去重
 - 可持久化的赛事订阅：首页与赛事页只展示用户选择的项目，至少保留一个订阅
 - 首页优先从今天开始；今天无比赛时从最近的历史比赛日开始，前 2 天赛事仍保留在上方供回滑查看
 - 首页固定标题、操作按钮与项目切换，仅滚动下方比赛列表
@@ -29,9 +30,9 @@
 
 ## 数据协议
 
-当前版本根据虎扑官方网页在 2026-08-24 使用的公开协议实现：
+当前版本根据虎扑官方网页在 2026-08-27 使用的公开协议实现：
 
-- 赛程：`match-api.hupu.com/.../getScheduleListByTagForH5`
+- 赛程：`match-api.hupu.com/.../getScheduleListByTagForH5`（专项 `businessId` + `commonhotsports` 补源）
 - 评分树：`games.mobileapi.hupu.com/1/8.2.99/.../getCurAndSubNodeByBizKey`
 - 最亮评论：`games.mobileapi.hupu.com/1/8.2.99/.../primarySingleRow/hottest`
 - 全部评论：`games.mobileapi.hupu.com/1/8.2.99/.../primarySingleRow`（游标分页）

@@ -3,6 +3,7 @@ package dev.kiritoxd.miaopu.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
@@ -11,16 +12,77 @@ import java.net.URLEncoder
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.HttpsURLConnection
 
 class HupuAdapter(
     private val cookieSession: HupuCookieSession,
 ) {
-    suspend fun getSchedule(esport: Esport): AdapterResult<Schedule> {
+    private val commonScheduleMutex = Mutex()
+    private val commonScheduleGeneration = AtomicLong()
+
+    @Volatile
+    private var commonScheduleCache: CachedHttpResponse? = null
+
+    fun invalidateSharedScheduleCache() {
+        commonScheduleGeneration.incrementAndGet()
+        commonScheduleCache = null
+    }
+
+    suspend fun getSchedule(esport: Esport): AdapterResult<Schedule> = coroutineScope {
+        val primaryDeferred = esport.primaryScheduleBusinessId?.let { businessId ->
+            async { getScheduleSource(businessId, esport) }
+        }
+        val supplementalDeferreds = esport.supplementalSources.map { source ->
+            source to async { getScheduleSource(source.businessId, esport) }
+        }
+        val primaryResult = primaryDeferred?.await()
+        val supplementalResults = supplementalDeferreds.map { (source, deferred) ->
+            source to deferred.await()
+        }
+        val supplementalSchedules = supplementalResults.mapNotNull { (source, result) ->
+            result.data?.filterMatches { match -> source.includes(match.introduction) }
+        }
+        val schedules = buildList {
+            primaryResult?.data?.let(::add)
+            addAll(supplementalSchedules.filter { it.days.isNotEmpty() })
+        }
+
+        if (schedules.isEmpty()) {
+            primaryResult?.let { return@coroutineScope it }
+            supplementalSchedules.firstOrNull()?.let { emptySchedule ->
+                return@coroutineScope AdapterResult.success(
+                    source = "hupu.schedule.${esport.businessId}",
+                    data = emptySchedule,
+                )
+            }
+            return@coroutineScope supplementalResults
+                .firstNotNullOfOrNull { (_, result) ->
+                    result.takeIf { it.status != AdapterStatus.SUCCESS }
+                }
+                ?: AdapterResult.failure(
+                    source = "hupu.schedule.${esport.businessId}",
+                    status = AdapterStatus.NOT_CONFIGURED,
+                    message = "这个项目暂时没有赛程来源",
+                    retryable = false,
+                )
+        }
+
+        AdapterResult.success(
+            source = "hupu.schedule.${esport.businessId}",
+            data = schedules.singleOrNull() ?: mergeSchedules(schedules),
+        )
+    }
+
+    private suspend fun getScheduleSource(
+        businessId: String,
+        esport: Esport,
+    ): AdapterResult<Schedule> {
         val endpoint = "${HupuUrls.SCHEDULE_BASE}/1/8.2.10/matchallapi/bff/standard/getScheduleListByTagForH5" +
-            "?businessType=common&businessId=${encode(esport.businessId)}&datasource=navigation"
-        return getAndParse(endpoint, "hupu.schedule.${esport.businessId}") {
-            HupuJsonParser.schedule(it, esport)
+            "?businessType=common&businessId=${encode(businessId)}&datasource=navigation"
+        val response = requestSchedule(endpoint, businessId)
+        return withContext(Dispatchers.Default) {
+            response.toAdapterResult("hupu.schedule.$businessId") { HupuJsonParser.schedule(it, esport) }
         }
     }
 
@@ -235,6 +297,31 @@ class HupuAdapter(
         }
     }
 
+    private suspend fun requestSchedule(endpoint: String, businessId: String): HttpResponse {
+        if (businessId != ScheduleSource.COMMON_HOT_SPORTS_BUSINESS_ID) return request(endpoint)
+
+        val now = System.currentTimeMillis()
+        commonScheduleCache?.takeIf { now - it.receivedAtMillis <= COMMON_SCHEDULE_CACHE_MILLIS }
+            ?.let { return it.response }
+
+        commonScheduleMutex.lock()
+        try {
+            val lockedNow = System.currentTimeMillis()
+            val lockedGeneration = commonScheduleGeneration.get()
+            commonScheduleCache?.takeIf {
+                lockedNow - it.receivedAtMillis <= COMMON_SCHEDULE_CACHE_MILLIS
+            }?.let { return it.response }
+
+            return request(endpoint).also { response ->
+                if (commonScheduleGeneration.get() == lockedGeneration) {
+                    commonScheduleCache = CachedHttpResponse(lockedNow, response)
+                }
+            }
+        } finally {
+            commonScheduleMutex.unlock()
+        }
+    }
+
     private suspend fun <T> HttpResponse.toAdapterResult(
         source: String,
         parser: (String) -> T,
@@ -260,6 +347,11 @@ class HupuAdapter(
         val transportError: String? = null,
     )
 
+    private data class CachedHttpResponse(
+        val receivedAtMillis: Long,
+        val response: HttpResponse,
+    )
+
     private fun encode(value: String): String =
         URLEncoder.encode(value, StandardCharsets.UTF_8.toString())
 
@@ -267,5 +359,17 @@ class HupuAdapter(
         const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Miaopu/1.0) AppleWebKit/537.36 Chrome/124 Mobile Safari/537.36"
         const val INLINE_REPLY_INITIAL_CURSOR = 31_507_200_000L
         const val INLINE_REPLY_PAGE_SIZE = 20
+        const val COMMON_SCHEDULE_CACHE_MILLIS = 60_000L
     }
+}
+
+private fun Schedule.filterMatches(predicate: (MatchSummary) -> Boolean): Schedule {
+    val filteredDays = days.mapNotNull { day ->
+        day.copy(matches = day.matches.filter(predicate)).takeIf { it.matches.isNotEmpty() }
+    }
+    val retainedMatchIds = filteredDays.flatMap(ScheduleDay::matches).mapTo(hashSetOf(), MatchSummary::id)
+    return copy(
+        anchorMatchId = anchorMatchId?.takeIf { it in retainedMatchIds },
+        days = filteredDays,
+    )
 }

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.kiritoxd.miaopu.data.Esport
 import dev.kiritoxd.miaopu.data.EsportCatalog
+import dev.kiritoxd.miaopu.data.ScheduleCategory
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -42,7 +43,7 @@ fun SubscriptionScreen(viewModel: MiaopuViewModel) {
         topBar = {
             SmallTopAppBar(
                 title = "赛事订阅",
-                subtitle = "只收录虎扑当前有赛程的项目",
+                subtitle = "展示虎扑当前已收录的赛程",
                 navigationIcon = {
                     IconButton(onClick = viewModel::goBack) {
                         Icon(MiuixIcons.ChevronBackward, contentDescription = "返回我的")
@@ -61,19 +62,22 @@ fun SubscriptionScreen(viewModel: MiaopuViewModel) {
             item {
                 SubscriptionSummary(viewModel.subscribedEsports.size)
             }
-            item {
-                SectionHeading("可订阅项目")
-            }
-            items(
-                items = EsportCatalog.all,
-                key = Esport::businessId,
-            ) { esport ->
-                SubscriptionItem(
-                    esport = esport,
-                    subscribed = esport in viewModel.subscribedEsports,
-                    canUnsubscribe = viewModel.subscribedEsports.size > 1,
-                    onToggle = { viewModel.toggleSubscription(esport) },
-                )
+            ScheduleCategory.entries.forEach { category ->
+                val projects = EsportCatalog.all.filter { it.category == category }
+                item(key = "category-${category.name}") {
+                    SectionHeading(category.title)
+                }
+                items(
+                    items = projects,
+                    key = Esport::businessId,
+                ) { esport ->
+                    SubscriptionItem(
+                        esport = esport,
+                        subscribed = esport in viewModel.subscribedEsports,
+                        canUnsubscribe = viewModel.subscribedEsports.size > 1,
+                        onToggle = { viewModel.toggleSubscription(esport) },
+                    )
+                }
             }
         }
     }
@@ -102,7 +106,7 @@ private fun SubscriptionSummary(count: Int) {
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "首页只展示你的订阅；赛程为空的电竞项目不会进入这个列表。",
+            text = "首页只展示你的订阅；体育项目会合并专项赛程与综合热门中的对应比赛。",
             style = MiuixTheme.textStyles.body2,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         )
@@ -148,6 +152,8 @@ private fun SubscriptionItem(
                 Text(
                     text = if (subscribed && !canUnsubscribe) {
                         "当前唯一订阅 · 至少保留一个项目"
+                    } else if (esport.category == ScheduleCategory.SPORTS) {
+                        "虎扑赛程 · 综合热门补全 · 选手评分"
                     } else {
                         "虎扑赛程 · 选手评分 · 热评"
                     },

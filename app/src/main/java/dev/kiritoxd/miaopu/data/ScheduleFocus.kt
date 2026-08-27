@@ -17,7 +17,7 @@ fun mergeSchedules(schedules: Iterable<Schedule>): Schedule {
                     ?: date,
                 matches = sameDateDays
                     .flatMap(ScheduleDay::matches)
-                    .distinctBy { match -> match.esport.businessId to match.id }
+                    .distinctBy(MatchSummary::scheduleIdentity)
                     .sortedWith(
                         compareBy<MatchSummary> { match ->
                             match.startTimeMillis.takeIf { it > 0L } ?: Long.MAX_VALUE
@@ -101,12 +101,12 @@ private fun Schedule.focusMatch(nowMillis: Long): MatchSummary? =
     days.flatMap(ScheduleDay::matches).let { matches ->
         matches.filter(MatchSummary::isLive).minWithOrNull(matchTimeOrder)
             ?: matches
-                .filter { !it.isFinished && it.startTimeMillis >= nowMillis }
+                .filter { !it.isTerminal && it.startTimeMillis >= nowMillis }
                 .minWithOrNull(matchTimeOrder)
         ?: anchorMatchId?.let { anchor ->
                 matches.firstOrNull { it.id == anchor }
             }
-            ?: matches.filterNot(MatchSummary::isFinished).minWithOrNull(matchTimeOrder)
+            ?: matches.filterNot(MatchSummary::isTerminal).minWithOrNull(matchTimeOrder)
             ?: matches.maxWithOrNull(matchTimeOrder)
         }
 
@@ -129,9 +129,6 @@ private fun dateKeysAround(nowMillis: Long, daysBefore: Int, daysAfter: Int): Se
 private fun dateKey(nowMillis: Long): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(nowMillis)
 
-private val MatchSummary.isLive: Boolean
-    get() = statusCode in setOf("LIVE", "ONGOING", "PROCESSING") ||
-        status.contains("进行") || status.contains("直播")
-
-private val MatchSummary.isFinished: Boolean
-    get() = statusCode == "COMPLETED" || status.contains("结束") || status.contains("完赛")
+private val MatchSummary.scheduleIdentity: String
+    get() = uniqueKey.takeIf { it.isNotBlank() && it != id }
+        ?: "${esport.businessId}:$id"

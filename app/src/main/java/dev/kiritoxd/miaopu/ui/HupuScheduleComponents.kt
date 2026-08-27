@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import dev.kiritoxd.miaopu.data.MatchSummary
 import dev.kiritoxd.miaopu.data.ScheduleDay
 import dev.kiritoxd.miaopu.data.Team
+import dev.kiritoxd.miaopu.data.isLive
+import dev.kiritoxd.miaopu.data.isTerminal
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
@@ -340,14 +342,9 @@ private fun ScheduleTeamLine(team: Team) {
 @Composable
 private fun statusColor(match: MatchSummary): Color = when {
     match.isLive -> MiuixTheme.colorScheme.error
-    match.statusCode == "COMPLETED" || match.status.contains("结束") || match.status.contains("完赛") ->
-        MiuixTheme.colorScheme.onSurfaceVariantSummary
+    match.isTerminal -> MiuixTheme.colorScheme.onSurfaceVariantSummary
     else -> MiuixTheme.colorScheme.onSurface
 }
 
 private val MatchSummary.hasRatings: Boolean
     get() = !outBizType.isNullOrBlank() && !outBizNo.isNullOrBlank()
-
-private val MatchSummary.isLive: Boolean
-    get() = statusCode in setOf("LIVE", "ONGOING", "PROCESSING") ||
-        status.contains("进行") || status.contains("直播")
