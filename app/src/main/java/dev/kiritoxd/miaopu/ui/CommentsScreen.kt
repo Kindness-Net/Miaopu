@@ -3,10 +3,12 @@ package dev.kiritoxd.miaopu.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -15,17 +17,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.kiritoxd.miaopu.data.HupuComment
 import dev.kiritoxd.miaopu.data.RatingTarget
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import top.yukonga.miuix.kmp.basic.Button
@@ -54,7 +59,7 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
         viewModel.commentDraft,
     ) {
         if (publishAttemptActive && !viewModel.isPublishingComment) {
-            if (viewModel.commentDraft.isEmpty()) {
+            if (viewModel.lastCommentSubmissionSucceeded) {
                 showComposer = false
                 selectedScore = 0
             }
@@ -69,6 +74,19 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
     )
     val listState = rememberLazyListState()
     val currentTarget = viewModel.latestRatingTarget(target)
+    val isImeVisible = WindowInsets.isImeVisible
+    var composerReady by remember(showComposer, viewModel.isLoggedIn) {
+        mutableStateOf(!viewModel.isLoggedIn)
+    }
+    LaunchedEffect(showComposer, isImeVisible, viewModel.isLoggedIn) {
+        if (!showComposer || composerReady) return@LaunchedEffect
+        if (isImeVisible) {
+            delay(300)
+        } else {
+            delay(550)
+        }
+        composerReady = true
+    }
     Box(Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MiuixTheme.colorScheme.surface,
@@ -215,7 +233,8 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .imePadding(),
+                    .imePadding()
+                    .alpha(if (composerReady) 1f else 0f),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 CommentInputBar(

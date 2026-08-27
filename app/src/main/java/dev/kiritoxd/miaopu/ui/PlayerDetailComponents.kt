@@ -172,6 +172,8 @@ internal fun CommentInputBar(
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val scoreChanged = hasPendingScore(selectedScore, target.userScore)
+    val scoreOnly = value.isBlank() && scoreChanged
     LaunchedEffect(loggedIn) {
         if (!loggedIn) return@LaunchedEffect
         focusRequester.requestFocus()
@@ -257,17 +259,30 @@ internal fun CommentInputBar(
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = onPublish,
-                enabled = loggedIn && value.isNotBlank() && !publishing,
+                enabled = loggedIn && canSubmitCommentOrScore(value, selectedScore, target.userScore) && !publishing,
                 minWidth = 72.dp,
                 minHeight = 40.dp,
                 insideMargin = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                 colors = ButtonDefaults.buttonColorsPrimary(),
             ) {
                 Text(
-                    text = if (publishing) "发送中" else "发送",
+                    text = when {
+                        publishing -> "提交中"
+                        scoreOnly -> "评分"
+                        else -> "发送"
+                    },
                     style = MiuixTheme.textStyles.button,
                 )
             }
         }
     }
 }
+
+internal fun canSubmitCommentOrScore(
+    comment: String,
+    selectedScore: Int,
+    userScore: Int,
+): Boolean = comment.isNotBlank() || hasPendingScore(selectedScore, userScore)
+
+private fun hasPendingScore(selectedScore: Int, userScore: Int): Boolean =
+    selectedScore > 0 && selectedScore != userScore

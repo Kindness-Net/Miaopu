@@ -99,6 +99,8 @@ class MiaopuViewModel(
         private set
     var isPublishingComment: Boolean by mutableStateOf(false)
         private set
+    var lastCommentSubmissionSucceeded: Boolean by mutableStateOf(false)
+        private set
     var message: String? by mutableStateOf(null)
         private set
     var updateCheckState: UpdateCheckState by mutableStateOf(UpdateCheckState.Idle)
@@ -319,19 +321,35 @@ class MiaopuViewModel(
     fun publishComment(target: RatingTarget, score: Int? = null) {
         if (isPublishingComment) return
         val content = commentDraft.trim()
-        if (content.isEmpty()) {
-            message = "请先输入评论内容"
+        if (content.isEmpty() && score == null) {
+            message = "请输入评论或选择新的评分"
             return
         }
         if (!isLoggedIn) {
             message = "请先在“我的”中登录虎扑"
             return
         }
+        lastCommentSubmissionSucceeded = false
         isPublishingComment = true
         val targetKey = target.key
         val token = publishCommentGate.begin(targetKey)
         publishCommentJob = viewModelScope.launch {
             try {
+                if (content.isEmpty()) {
+                    val scoreToSubmit = requireNotNull(score)
+                    val scoreResult = adapter.submitScore(target, scoreToSubmit)
+                    if (!publishCommentGate.isCurrent(token)) return@launch
+                    if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
+                    if (scoreResult.status == AdapterStatus.SUCCESS) {
+                        updateUserScore(target, scoreToSubmit)
+                        lastCommentSubmissionSucceeded = true
+                        message = "评分提交成功"
+                    } else {
+                        if (scoreResult.status == AdapterStatus.AUTH_REQUIRED) isLoggedIn = false
+                        message = scoreResult.error?.message ?: "评分提交失败"
+                    }
+                    return@launch
+                }
                 val result = adapter.publishComment(target, content)
                 if (!publishCommentGate.isCurrent(token)) return@launch
                 if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
@@ -343,6 +361,7 @@ class MiaopuViewModel(
                         score?.let { updateUserScore(target, it) }
                     }
                     saveCommentDraft("")
+                    lastCommentSubmissionSucceeded = true
                     message = if (scoreResult != null && scoreResult.status != AdapterStatus.SUCCESS) {
                         if (scoreResult.status == AdapterStatus.AUTH_REQUIRED) isLoggedIn = false
                         "评论已发布，但${scoreResult.error?.message ?: "评分提交失败"}"
