@@ -97,7 +97,7 @@ internal fun PlayerIdentityCard(target: RatingTarget, onCommentClick: () -> Unit
                         modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MiuixTheme.textStyles.footnote2,
+                        style = MiuixTheme.textStyles.footnote1,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                     Spacer(Modifier.width(6.dp))
