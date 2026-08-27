@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -68,80 +69,59 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
     )
     val listState = rememberLazyListState()
     val currentTarget = viewModel.latestRatingTarget(target)
-    Scaffold(
-        containerColor = MiuixTheme.colorScheme.surface,
-        topBar = {
-            SmallTopAppBar(
-                title = "选手详情",
-                subtitle = target.name,
-                navigationIcon = {
-                    IconButton(onClick = viewModel::goBack) {
-                        Icon(MiuixIcons.ChevronBackward, contentDescription = "返回评分")
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            if (showComposer) {
-                CommentInputBar(
-                    value = viewModel.commentDraft,
-                    target = currentTarget,
-                    loggedIn = viewModel.isLoggedIn,
-                    publishing = viewModel.isPublishingComment,
-                    selectedScore = selectedScore,
-                    onValueChange = viewModel::updateCommentDraft,
-                    onPublish = {
-                        publishAttemptActive = true
-                        viewModel.publishComment(
-                            target = currentTarget,
-                            score = selectedScore.takeIf {
-                                it > 0 && it != currentTarget.userScore
-                            },
-                        )
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = MiuixTheme.colorScheme.surface,
+            topBar = {
+                SmallTopAppBar(
+                    title = "选手详情",
+                    subtitle = target.name,
+                    navigationIcon = {
+                        IconButton(onClick = viewModel::goBack) {
+                            Icon(MiuixIcons.ChevronBackward, contentDescription = "返回评分")
+                        }
                     },
-                    onScoreChange = { selectedScore = it },
                 )
-            }
-        },
-    ) { innerPadding ->
-        when (val state = viewModel.commentState) {
-            LoadState.Loading -> LoadingPane("正在加载选手详情", Modifier.padding(innerPadding))
-            is LoadState.Failed -> ErrorPane(
-                message = state.message,
-                retryable = state.retryable,
-                onRetry = viewModel::retry,
-                modifier = Modifier.padding(innerPadding),
-            )
-            is LoadState.Ready -> {
-                val page = state.value
-                LaunchedEffect(
-                    target.outBizType,
-                    target.outBizNo,
-                    page.comments.size,
-                    page.nextPublishTime,
-                    page.hasMore,
-                    viewModel.commentPaginationError,
-                ) {
-                    if (
-                        !page.hasMore ||
-                        page.nextPublishTime == null ||
-                        viewModel.commentPaginationError != null
-                    ) return@LaunchedEffect
-                    snapshotFlow {
-                        val layout = listState.layoutInfo
-                        val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
-                        layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 3
+            },
+        ) { innerPadding ->
+            when (val state = viewModel.commentState) {
+                LoadState.Loading -> LoadingPane("正在加载选手详情", Modifier.padding(innerPadding))
+                is LoadState.Failed -> ErrorPane(
+                    message = state.message,
+                    retryable = state.retryable,
+                    onRetry = viewModel::retry,
+                    modifier = Modifier.padding(innerPadding),
+                )
+                is LoadState.Ready -> {
+                    val page = state.value
+                    LaunchedEffect(
+                        target.outBizType,
+                        target.outBizNo,
+                        page.comments.size,
+                        page.nextPublishTime,
+                        page.hasMore,
+                        viewModel.commentPaginationError,
+                    ) {
+                        if (
+                            !page.hasMore ||
+                            page.nextPublishTime == null ||
+                            viewModel.commentPaginationError != null
+                        ) return@LaunchedEffect
+                        snapshotFlow {
+                            val layout = listState.layoutInfo
+                            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+                            layout.totalItemsCount > 0 && lastVisible >= layout.totalItemsCount - 3
+                        }
+                            .filter { it }
+                            .first()
+                        viewModel.loadMoreComments(target)
                     }
-                        .filter { it }
-                        .first()
-                    viewModel.loadMoreComments(target)
-                }
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = innerPadding,
-                    state = listState,
-                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = innerPadding,
+                        state = listState,
+                    ) {
                     item(contentType = "player-identity") {
                         PlayerIdentityCard(
                             target = currentTarget,
@@ -227,7 +207,35 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
                         }
                     }
                     item { Spacer(Modifier.height(16.dp)) }
+                    }
                 }
+            }
+        }
+        if (showComposer) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding(),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                CommentInputBar(
+                    value = viewModel.commentDraft,
+                    target = currentTarget,
+                    loggedIn = viewModel.isLoggedIn,
+                    publishing = viewModel.isPublishingComment,
+                    selectedScore = selectedScore,
+                    onValueChange = viewModel::updateCommentDraft,
+                    onPublish = {
+                        publishAttemptActive = true
+                        viewModel.publishComment(
+                            target = currentTarget,
+                            score = selectedScore.takeIf {
+                                it > 0 && it != currentTarget.userScore
+                            },
+                        )
+                    },
+                    onScoreChange = { selectedScore = it },
+                )
             }
         }
     }

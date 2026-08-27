@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -161,29 +159,6 @@ private fun RatingStars(score: Int) {
 }
 
 @Composable
-private fun CommentImages(imageUrls: List<String>) {
-    if (imageUrls.isEmpty()) return
-    Spacer(Modifier.height(10.dp))
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        itemsIndexed(
-            items = imageUrls,
-            key = { index, imageUrl -> "$index-$imageUrl" },
-            contentType = { _, _ -> "comment-image" },
-        ) { _, imageUrl ->
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = "评论图片",
-                modifier = Modifier
-                    .size(112.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MiuixTheme.colorScheme.surfaceVariant),
-                contentScale = ContentScale.Crop,
-            )
-        }
-    }
-}
-
-@Composable
 private fun ExpandedReplies(
     state: LoadState<CommentPage>?,
     fallback: List<HupuComment>,
@@ -245,6 +220,10 @@ private fun ExpandedReplies(
                         TextButton(
                             text = "重试加载更多",
                             onClick = onLoadMore,
+                            modifier = Modifier.width(96.dp),
+                            minWidth = 96.dp,
+                            minHeight = 32.dp,
+                            insideMargin = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                             textStyle = MiuixTheme.textStyles.footnote2,
                         )
                     }
@@ -252,6 +231,10 @@ private fun ExpandedReplies(
                         text = if (isLoadingMore) "加载中…" else "加载更多回复",
                         onClick = onLoadMore,
                         enabled = !isLoadingMore,
+                        modifier = Modifier.width(96.dp),
+                        minWidth = 96.dp,
+                        minHeight = 32.dp,
+                        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                         textStyle = MiuixTheme.textStyles.footnote2,
                     )
                 }
@@ -305,6 +288,7 @@ private fun ReplyRow(reply: HupuComment, rootCommentId: String) {
             }
             Spacer(Modifier.height(2.dp))
             Text(reply.content, style = MiuixTheme.textStyles.footnote1)
+            CommentImages(reply.imageUrls)
             val metadata = listOfNotNull(reply.date.takeIf(String::isNotBlank), reply.location).joinToString(" · ")
             if (metadata.isNotBlank()) {
                 Spacer(Modifier.height(3.dp))

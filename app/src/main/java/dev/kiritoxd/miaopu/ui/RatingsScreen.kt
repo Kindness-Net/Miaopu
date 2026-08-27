@@ -121,6 +121,16 @@ internal fun MatchHero(match: MatchSummary) {
                     style = MiuixTheme.textStyles.title2,
                     fontWeight = FontWeight.Bold,
                 )
+                overallMatchScore(match)?.let { score ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = score,
+                        style = MiuixTheme.textStyles.title3,
+                        color = MiuixTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
                 Spacer(Modifier.height(5.dp))
                 Text(
                     text = match.introduction.ifBlank { match.esport.title },
@@ -142,4 +152,13 @@ internal fun MatchHero(match: MatchSummary) {
             }
         }
     }
+}
+
+internal fun overallMatchScore(match: MatchSummary): String? {
+    if (match.teams.size != 2) return null
+    val bigScores = match.teams.map { it.bigScore?.takeIf(String::isNotBlank) }
+    val scores = bigScores.takeIf { values -> values.all { it != null } }
+        ?: match.teams.map { it.score?.takeIf(String::isNotBlank) }
+    return scores.takeIf { values -> values.all { it != null } }
+        ?.joinToString(" : ") { it.orEmpty() }
 }
