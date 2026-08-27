@@ -75,7 +75,7 @@ internal fun PlayerIdentityCard(target: RatingTarget, onCommentClick: () -> Unit
                         } else {
                             "—"
                         },
-                        style = MiuixTheme.textStyles.title2,
+                        style = MiuixTheme.textStyles.title1,
                         color = MiuixTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
