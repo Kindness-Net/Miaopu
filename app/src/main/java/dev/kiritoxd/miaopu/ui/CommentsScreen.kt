@@ -44,13 +44,19 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
     var publishAttemptActive by rememberSaveable(target.outBizType, target.outBizNo) {
         mutableStateOf(false)
     }
+    var selectedScore by rememberSaveable(target.outBizType, target.outBizNo) {
+        mutableStateOf(0)
+    }
     LaunchedEffect(
         publishAttemptActive,
         viewModel.isPublishingComment,
         viewModel.commentDraft,
     ) {
         if (publishAttemptActive && !viewModel.isPublishingComment) {
-            if (viewModel.commentDraft.isEmpty()) showComposer = false
+            if (viewModel.commentDraft.isEmpty()) {
+                showComposer = false
+                selectedScore = 0
+            }
             publishAttemptActive = false
         }
     }
@@ -82,13 +88,18 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
                     target = currentTarget,
                     loggedIn = viewModel.isLoggedIn,
                     publishing = viewModel.isPublishingComment,
-                    scoring = viewModel.scoringTargetKey != null,
+                    selectedScore = selectedScore,
                     onValueChange = viewModel::updateCommentDraft,
                     onPublish = {
                         publishAttemptActive = true
-                        viewModel.publishComment(target)
+                        viewModel.publishComment(
+                            target = currentTarget,
+                            score = selectedScore.takeIf {
+                                it > 0 && it != currentTarget.userScore
+                            },
+                        )
                     },
-                    onScore = viewModel::requestScore,
+                    onScoreChange = { selectedScore = it },
                 )
             }
         },
@@ -134,7 +145,10 @@ fun CommentsScreen(viewModel: MiaopuViewModel, target: RatingTarget) {
                     item(contentType = "player-identity") {
                         PlayerIdentityCard(
                             target = currentTarget,
-                            onCommentClick = { showComposer = true },
+                            onCommentClick = {
+                                selectedScore = currentTarget.userScore
+                                showComposer = true
+                            },
                         )
                     }
                     if (page.hottestComments.isNotEmpty()) {

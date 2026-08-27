@@ -95,8 +95,6 @@ class MiaopuViewModel(
         private set
     var commentPaginationError: String? by mutableStateOf(null)
         private set
-    var scoringTargetKey: String? by mutableStateOf(null)
-        private set
     var commentDraft: String by mutableStateOf(savedStateHandle[COMMENT_DRAFT_KEY] ?: "")
         private set
     var isPublishingComment: Boolean by mutableStateOf(false)
@@ -314,20 +312,11 @@ class MiaopuViewModel(
         }
     }
 
-    fun requestScore(target: RatingTarget, score: Int) {
-        if (scoringTargetKey != null) return
-        if (!isLoggedIn) {
-            message = "请先在“我的”中登录虎扑"
-            return
-        }
-        submitScore(target, score)
-    }
-
     fun updateCommentDraft(value: String) {
         saveCommentDraft(value.take(500))
     }
 
-    fun publishComment(target: RatingTarget) {
+    fun publishComment(target: RatingTarget, score: Int? = null) {
         if (isPublishingComment) return
         val content = commentDraft.trim()
         if (content.isEmpty()) {
@@ -347,8 +336,19 @@ class MiaopuViewModel(
                 if (!publishCommentGate.isCurrent(token)) return@launch
                 if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
                 if (result.status == AdapterStatus.SUCCESS) {
+                    val scoreResult = score?.let { adapter.submitScore(target, it) }
+                    if (!publishCommentGate.isCurrent(token)) return@launch
+                    if ((screen as? AppScreen.Comments)?.target?.key != targetKey) return@launch
+                    if (scoreResult?.status == AdapterStatus.SUCCESS) {
+                        score?.let { updateUserScore(target, it) }
+                    }
                     saveCommentDraft("")
-                    message = "评论发布成功"
+                    message = if (scoreResult != null && scoreResult.status != AdapterStatus.SUCCESS) {
+                        if (scoreResult.status == AdapterStatus.AUTH_REQUIRED) isLoggedIn = false
+                        "评论已发布，但${scoreResult.error?.message ?: "评分提交失败"}"
+                    } else {
+                        "评论发布成功"
+                    }
                     loadComments(target)
                 } else {
                     if (result.status == AdapterStatus.AUTH_REQUIRED) isLoggedIn = false
@@ -528,26 +528,6 @@ class MiaopuViewModel(
                 )
             } else {
                 pageResult.toLoadState()
-            }
-        }
-    }
-
-    private fun submitScore(target: RatingTarget, score: Int) {
-        val targetKey = "${target.outBizType}:${target.outBizNo}"
-        if (scoringTargetKey != null) return
-        scoringTargetKey = targetKey
-        viewModelScope.launch {
-            try {
-                val result = adapter.submitScore(target, score)
-                if (result.status == AdapterStatus.SUCCESS) {
-                    updateUserScore(target, score)
-                    message = "已提交 ${score / 2} 星评分"
-                } else {
-                    if (result.status == AdapterStatus.AUTH_REQUIRED) isLoggedIn = false
-                    message = result.error?.message ?: "评分失败"
-                }
-            } finally {
-                if (scoringTargetKey == targetKey) scoringTargetKey = null
             }
         }
     }

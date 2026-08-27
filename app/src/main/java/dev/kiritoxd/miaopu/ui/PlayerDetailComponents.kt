@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,6 +34,7 @@ import dev.kiritoxd.miaopu.data.RatingTarget
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -151,10 +153,10 @@ internal fun CommentInputBar(
     target: RatingTarget,
     loggedIn: Boolean,
     publishing: Boolean,
-    scoring: Boolean,
+    selectedScore: Int,
     onValueChange: (String) -> Unit,
     onPublish: () -> Unit,
-    onScore: (RatingTarget, Int) -> Unit,
+    onScoreChange: (Int) -> Unit,
 ) {
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -166,6 +168,7 @@ internal fun CommentInputBar(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .imePadding()
             .padding(horizontal = 12.dp, vertical = 8.dp),
         insideMargin = PaddingValues(12.dp),
         cornerRadius = 22.dp,
@@ -182,18 +185,17 @@ internal fun CommentInputBar(
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
                 (1..5).forEach { stars ->
-                    val filled = target.userScore >= stars * 2
-                    Button(
-                        onClick = { onScore(target, stars * 2) },
+                    val score = stars * 2
+                    val filled = selectedScore >= score
+                    IconButton(
+                        onClick = { onScoreChange(score) },
                         modifier = Modifier.semantics {
                             contentDescription = "$stars 星"
-                            selected = target.userScore == stars * 2
+                            selected = selectedScore == score
                         },
-                        enabled = loggedIn && !scoring,
+                        enabled = loggedIn && !publishing,
                         minWidth = 40.dp,
                         minHeight = 40.dp,
-                        insideMargin = PaddingValues(0.dp),
-                        colors = ButtonDefaults.buttonColors(),
                     ) {
                         Text(
                             text = if (filled) "★" else "☆",
