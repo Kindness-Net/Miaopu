@@ -470,7 +470,6 @@ private fun EventsContent(
 @Composable
 private fun HomeHeader(viewModel: MiaopuViewModel) {
     PageHeading(
-        eyebrow = "HUPU ESPORTS",
         title = "近期赛程",
         actions = {
             IconButton(
@@ -493,7 +492,6 @@ private fun EventsHeader(
     onSearchExpandedChange: (Boolean) -> Unit,
 ) {
     PageHeading(
-        eyebrow = "MATCH CENTER",
         title = "完整赛程",
         actions = {
             Row {
@@ -559,7 +557,6 @@ private fun ProfileContent(viewModel: MiaopuViewModel, innerPadding: PaddingValu
     ) {
         item {
             PageHeading(
-                eyebrow = "ACCOUNT",
                 title = "我的喵扑",
             )
         }

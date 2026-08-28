@@ -55,7 +55,6 @@ internal fun dataSourceTabRowColors(): TabRowColors = TabRowDefaults.tabRowColor
 
 @Composable
 internal fun PageHeading(
-    eyebrow: String,
     title: String,
     summary: String? = null,
     actions: @Composable (() -> Unit)? = null,
@@ -67,12 +66,6 @@ internal fun PageHeading(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(
-                eyebrow,
-                style = MiuixTheme.textStyles.footnote1,
-                color = MiuixTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-            )
             Text(title, style = MiuixTheme.textStyles.title1, fontWeight = FontWeight.Bold)
             summary?.let {
                 Spacer(Modifier.height(2.dp))

@@ -405,7 +405,7 @@ private fun FractionalRatingStars(scoreAverage: Double, scoreCount: Int) {
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(14.dp)
+            .height(12.dp)
             .semantics {
                 contentDescription = if (scoreCount > 0) {
                     "平均评分 %.1f 分".format(scoreAverage)

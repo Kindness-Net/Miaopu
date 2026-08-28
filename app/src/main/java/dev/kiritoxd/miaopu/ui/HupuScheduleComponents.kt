@@ -280,7 +280,14 @@ internal fun HupuScheduleMatchCard(match: MatchSummary, onClick: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                     )
                 } else {
-                    match.teams.take(2).forEach { team -> ScheduleTeamLine(team) }
+                    val visibleTeams = match.teams.take(2)
+                    val hasWinner = visibleTeams.any { it.winner }
+                    visibleTeams.forEach { team ->
+                        ScheduleTeamLine(
+                            team = team,
+                            isLoser = hasWinner && !team.winner,
+                        )
+                    }
                 }
             }
 
@@ -319,7 +326,7 @@ internal fun HupuScheduleMatchCard(match: MatchSummary, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ScheduleTeamLine(team: Team) {
+private fun ScheduleTeamLine(team: Team, isLoser: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         TeamLogo(team = team, size = 28.dp)
         Spacer(Modifier.width(8.dp))
@@ -335,6 +342,11 @@ private fun ScheduleTeamLine(team: Team) {
             text = team.score ?: "—",
             modifier = Modifier.width(36.dp),
             style = MiuixTheme.textStyles.body1,
+            color = if (isLoser) {
+                MiuixTheme.colorScheme.onSurfaceVariantSummary
+            } else {
+                Color.Unspecified
+            },
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             textAlign = TextAlign.End,
